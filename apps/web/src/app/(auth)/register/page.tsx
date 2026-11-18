@@ -18,6 +18,7 @@ export default function RegisterPage() {
     tenantName: '',
     tenantSlug: '',
   });
+  const [error, setError] = React.useState('');
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
@@ -33,8 +34,13 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await registerUser(formData);
-    router.push('/dashboard');
+    setError('');
+    try {
+      await registerUser(formData);
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err?.message || 'Registration failed. Please try again.');
+    }
   };
 
   return (

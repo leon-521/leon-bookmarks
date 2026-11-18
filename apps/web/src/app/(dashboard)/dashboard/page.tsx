@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {
-  Bookmark,
+  Bookmark as BookmarkIcon,
   FolderTree,
   Users,
   TrendingUp,
@@ -14,49 +14,52 @@ import {
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
-import { mockBookmarks, mockCategories } from '@/lib/mock-data';
-import { getDomainFromUrl } from '@/lib/utils';
-import { cn } from '@/lib/utils';
-
-const quickStats = [
-  {
-    label: 'Total Bookmarks',
-    value: '127',
-    change: '+12 this week',
-    icon: Bookmark,
-    color: 'text-accent',
-    bgColor: 'bg-accent-muted',
-  },
-  {
-    label: 'Categories',
-    value: '14',
-    change: '+2 this month',
-    icon: FolderTree,
-    color: 'text-success',
-    bgColor: 'bg-success-light',
-  },
-  {
-    label: 'Team Members',
-    value: '8',
-    change: '3 active now',
-    icon: Users,
-    color: 'text-warning',
-    bgColor: 'bg-warning-light',
-  },
-  {
-    label: 'Portal Views',
-    value: '2,847',
-    change: '+18% vs last week',
-    icon: TrendingUp,
-    color: 'text-violet-500',
-    bgColor: 'bg-violet-50',
-  },
-];
+import { useBookmarks } from '@/hooks/use-bookmarks';
+import { getDomainFromUrl, cn } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const recentBookmarks = mockBookmarks.slice(0, 5);
+  const { user, tenant } = useAuth();
+  const { data: bookmarksData, isLoading } = useBookmarks({ limit: 5, sortBy: 'createdAt', sortOrder: 'desc' });
+
+  const bookmarks = bookmarksData?.data ?? bookmarksData ?? [];
+  const totalBookmarks = bookmarksData?.meta?.total ?? (Array.isArray(bookmarksData) ? bookmarksData.length : 0);
+
+  const quickStats = [
+    {
+      label: 'Total Bookmarks',
+      value: String(totalBookmarks),
+      change: 'All time',
+      icon: BookmarkIcon,
+      color: 'text-accent',
+      bgColor: 'bg-accent-muted',
+    },
+    {
+      label: 'Categories',
+      value: '--',
+      change: 'Organized',
+      icon: FolderTree,
+      color: 'text-success',
+      bgColor: 'bg-success-light',
+    },
+    {
+      label: 'Team Members',
+      value: '--',
+      change: 'Active',
+      icon: Users,
+      color: 'text-warning',
+      bgColor: 'bg-warning-light',
+    },
+    {
+      label: 'Portal Views',
+      value: '--',
+      change: 'Tracking',
+      icon: TrendingUp,
+      color: 'text-violet-500',
+      bgColor: 'bg-violet-50',
+    },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -107,66 +110,99 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="divide-y divide-border">
-            {recentBookmarks.map((bookmark) => (
-              <div key={bookmark.id} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-bg-secondary">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-secondary">
-                  {bookmark.favicon ? (
-                    <img src={bookmark.favicon} alt="" className="h-5 w-5 rounded-sm object-contain" />
-                  ) : (
-                    <Globe className="h-4 w-4 text-text-tertiary" />
-                  )}
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-3.5">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
+              ))
+            ) : (
+              (Array.isArray(bookmarks) ? bookmarks : []).slice(0, 5).map((bookmark: any) => (
+                <div key={bookmark.id} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-bg-secondary">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-secondary">
+                    {bookmark.faviconUrl || bookmark.favicon ? (
+                      <img src={bookmark.faviconUrl || bookmark.favicon} alt="" className="h-5 w-5 rounded-sm object-contain" />
+                    ) : (
+                      <Globe className="h-4 w-4 text-text-tertiary" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={bookmark.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block truncate text-sm font-medium text-text-primary hover:text-accent transition-colors"
+                    >
+                      {bookmark.title}
+                    </a>
+                    <span className="text-xs text-text-tertiary">{getDomainFromUrl(bookmark.url)}</span>
+                  </div>
+                  <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 text-[11px]">
+                    {bookmark.category?.name || bookmark.categoryName || 'Uncategorized'}
+                  </Badge>
                   <a
                     href={bookmark.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block truncate text-sm font-medium text-text-primary hover:text-accent transition-colors"
+                    className="shrink-0 rounded-md p-1 text-text-tertiary hover:text-accent hover:bg-bg-secondary transition-colors"
                   >
-                    {bookmark.title}
+                    <ExternalLink className="h-3.5 w-3.5" />
                   </a>
-                  <span className="text-xs text-text-tertiary">{getDomainFromUrl(bookmark.url)}</span>
                 </div>
-                <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 text-[11px]">
-                  {bookmark.categoryName}
-                </Badge>
-                <a
-                  href={bookmark.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 rounded-md p-1 text-text-tertiary hover:text-accent hover:bg-bg-secondary transition-colors"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
-        {/* Top Categories */}
+        {/* Quick Links */}
         <div className="rounded-xl border border-border bg-bg-primary shadow-xs">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="font-display font-semibold text-text-primary">Top Categories</h2>
-            <Link href="/categories" className="flex items-center gap-1 text-sm text-accent hover:text-accent-hover transition-colors">
-              Manage
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            <h2 className="font-display font-semibold text-text-primary">Quick Actions</h2>
           </div>
           <div className="p-4 space-y-2">
-            {mockCategories.map((category) => (
-              <div
-                key={category.id}
-                className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-bg-secondary"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent-muted">
-                    <FolderTree className="h-4 w-4 text-accent" />
-                  </div>
-                  <span className="text-sm font-medium text-text-primary">{category.name}</span>
-                </div>
-                <Badge variant="secondary" className="text-[11px]">{category.bookmarkCount}</Badge>
+            <Link
+              href="/bookmarks"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-bg-secondary"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent-muted">
+                <BookmarkIcon className="h-4 w-4 text-accent" />
               </div>
-            ))}
+              <span className="text-sm font-medium text-text-primary">Manage Bookmarks</span>
+            </Link>
+            <Link
+              href="/categories"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-bg-secondary"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-success-light">
+                <FolderTree className="h-4 w-4 text-success" />
+              </div>
+              <span className="text-sm font-medium text-text-primary">Manage Categories</span>
+            </Link>
+            <Link
+              href="/settings"
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-bg-secondary"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-warning-light">
+                <TrendingUp className="h-4 w-4 text-warning" />
+              </div>
+              <span className="text-sm font-medium text-text-primary">Theme & Settings</span>
+            </Link>
+            {tenant?.slug && (
+              <Link
+                href={`/portal/${tenant.slug}`}
+                target="_blank"
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-bg-secondary"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-violet-50">
+                  <Globe className="h-4 w-4 text-violet-500" />
+                </div>
+                <span className="text-sm font-medium text-text-primary">View Portal</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>

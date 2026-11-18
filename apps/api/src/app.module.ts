@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { BookmarkModule } from './modules/bookmark/bookmark.module';
 import { CategoryModule } from './modules/category/category.module';
+import { PortalModule } from './modules/portal/portal.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -21,6 +22,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     TenantModule,
     BookmarkModule,
     CategoryModule,
+    PortalModule,
   ],
   providers: [
     {

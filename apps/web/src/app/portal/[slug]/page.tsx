@@ -3,31 +3,109 @@
 import * as React from 'react';
 import { Search, Sun, Moon, ExternalLink, Globe, Sparkles, X } from 'lucide-react';
 import { cn, getDomainFromUrl } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import { mockBookmarks, mockCategories, mockTenant } from '@/lib/mock-data';
+
+interface PortalBookmark {
+  id: string;
+  title: string;
+  url: string;
+  description?: string | null;
+  faviconUrl?: string | null;
+  tags: string[];
+  isPinned: boolean;
+  categoryId?: string | null;
+  category?: { id: string; name: string } | null;
+}
+
+interface PortalCategory {
+  id: string;
+  name: string;
+  icon?: string | null;
+  parentId?: string | null;
+  children?: PortalCategory[];
+  _count?: { bookmarks: number };
+}
+
+interface PortalData {
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    logo?: string | null;
+    themeConfig?: Record<string, any> | null;
+  };
+  categories: PortalCategory[];
+  bookmarks: PortalBookmark[];
+  stats: { totalBookmarks: number; totalCategories: number };
+}
 
 export default function PortalPage({ params }: { params: { slug: string } }) {
   const [search, setSearch] = React.useState('');
   const [isDark, setIsDark] = React.useState(false);
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
+  const [data, setData] = React.useState<PortalData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const tenant = mockTenant;
-  const accentColor = tenant.themeConfig.accentColor;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-  const filteredBookmarks = mockBookmarks.filter((b) => {
+  React.useEffect(() => {
+    const fetchPortal = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${apiUrl}/portal/${params.slug}`);
+        if (!res.ok) throw new Error(`Portal not found`);
+        const json = await res.json();
+        // Handle both wrapped { data } and direct response
+        setData(json.data || json);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPortal();
+  }, [params.slug, apiUrl]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="h-10 w-10 mx-auto animate-spin rounded-full border-2 border-blue-500 border-t-transparent mb-4" />
+          <p className="text-gray-500 text-sm">Loading portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Globe className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Portal Not Found</h2>
+          <p className="text-gray-500 text-sm">The portal &quot;{params.slug}&quot; doesn&apos;t exist or is not available.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { tenant, categories, bookmarks } = data;
+  const accentColor = tenant.themeConfig?.accentColor || '#3b82f6';
+
+  const filteredBookmarks = bookmarks.filter((b) => {
     const matchesSearch =
       !search ||
       b.title.toLowerCase().includes(search.toLowerCase()) ||
-      b.description.toLowerCase().includes(search.toLowerCase()) ||
+      (b.description || '').toLowerCase().includes(search.toLowerCase()) ||
       b.url.toLowerCase().includes(search.toLowerCase());
 
     const matchesCategory = !selectedCategory || b.categoryId === selectedCategory ||
-      mockCategories.find((c) => c.id === selectedCategory)?.children?.some((child) => child.id === b.categoryId);
+      categories.find((c) => c.id === selectedCategory)?.children?.some((child) => child.id === b.categoryId);
 
     return matchesSearch && matchesCategory;
   });
 
-  const groupedBookmarks = mockCategories.reduce(
+  const groupedBookmarks = categories.reduce(
     (acc, category) => {
       const categoryBookmarks = filteredBookmarks.filter(
         (b) =>
@@ -39,7 +117,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
       }
       return acc;
     },
-    [] as { category: typeof mockCategories[0]; bookmarks: typeof mockBookmarks }[]
+    [] as { category: PortalCategory; bookmarks: PortalBookmark[] }[]
   );
 
   return (
@@ -70,7 +148,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
               <div>
                 <h1 className="font-display text-lg font-bold">{tenant.name}</h1>
                 <p className="text-xs" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-                  Team Navigation Portal
+                  {data.stats.totalBookmarks} links · {data.stats.totalCategories} categories
                 </p>
               </div>
             </div>
@@ -110,10 +188,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
               <button
                 onClick={() => setIsDark(!isDark)}
                 className="rounded-lg p-2 transition-colors"
-                style={{
-                  color: isDark ? '#94a3b8' : '#475569',
-                  ...(isDark ? {} : { backgroundColor: 'transparent' }),
-                }}
+                style={{ color: isDark ? '#94a3b8' : '#475569' }}
               >
                 {isDark ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
               </button>
@@ -146,9 +221,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
           <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-none pb-1">
             <button
               onClick={() => setSelectedCategory(null)}
-              className={cn(
-                'shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all duration-200'
-              )}
+              className="shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all duration-200"
               style={{
                 backgroundColor: !selectedCategory ? accentColor : isDark ? '#1e293b' : '#ffffff',
                 color: !selectedCategory ? '#ffffff' : isDark ? '#94a3b8' : '#475569',
@@ -157,7 +230,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
             >
               All
             </button>
-            {mockCategories.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
@@ -262,7 +335,7 @@ function PortalBookmarkCard({
   isDark,
   index,
 }: {
-  bookmark: typeof mockBookmarks[0];
+  bookmark: PortalBookmark;
   accentColor: string;
   isDark: boolean;
   index: number;
@@ -291,8 +364,8 @@ function PortalBookmarkCard({
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
           style={{ backgroundColor: isDark ? '#334155' : '#f1f3f7' }}
         >
-          {bookmark.favicon ? (
-            <img src={bookmark.favicon} alt="" className="h-5 w-5 rounded-sm object-contain" />
+          {bookmark.faviconUrl ? (
+            <img src={bookmark.faviconUrl} alt="" className="h-5 w-5 rounded-sm object-contain" />
           ) : (
             <Globe className="h-5 w-5" style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
           )}

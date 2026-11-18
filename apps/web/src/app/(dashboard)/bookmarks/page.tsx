@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useBookmarks } from '@/hooks/use-bookmarks';
-import { mockCategories, type Bookmark } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
 
 export default function BookmarksPage() {
@@ -24,16 +23,26 @@ export default function BookmarksPage() {
   const [search, setSearch] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
   const [sortBy, setSortBy] = React.useState('default');
+  const [page, setPage] = React.useState(1);
   const [formOpen, setFormOpen] = React.useState(false);
-  const [editingBookmark, setEditingBookmark] = React.useState<Bookmark | null>(null);
+  const [editingBookmark, setEditingBookmark] = React.useState<any | null>(null);
 
-  const { data: bookmarks, isLoading } = useBookmarks({
+  const { data: response, isLoading } = useBookmarks({
     search: search || undefined,
     categoryId: categoryFilter !== 'all' ? categoryFilter : undefined,
-    sort: sortBy !== 'default' ? sortBy : undefined,
+    sortBy: sortBy === 'title' ? 'title' : sortBy === 'newest' ? 'createdAt' : sortBy === 'oldest' ? 'createdAt' : undefined,
+    sortOrder: sortBy === 'oldest' ? 'asc' : 'desc',
+    page,
+    limit: 20,
   });
 
-  const handleEdit = (bookmark: Bookmark) => {
+  // Handle both paginated API response and flat array (mock)
+  const bookmarks = response?.data ?? (Array.isArray(response) ? response : []);
+  const meta = response?.meta;
+  const totalPages = meta?.totalPages ?? 1;
+  const totalItems = meta?.total ?? bookmarks.length;
+
+  const handleEdit = (bookmark: any) => {
     setEditingBookmark(bookmark);
     setFormOpen(true);
   };
@@ -65,21 +74,16 @@ export default function BookmarksPage() {
         <div className="flex flex-1 items-center gap-3">
           <SearchBar
             value={search}
-            onChange={setSearch}
+            onChange={(val) => { setSearch(val); setPage(1); }}
             className="flex-1 max-w-md"
           />
           <div className="hidden sm:flex items-center gap-2">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setPage(1); }}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                {mockCategories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
               </SelectContent>
             </Select>
 
@@ -128,18 +132,13 @@ export default function BookmarksPage() {
 
       {/* Mobile filters */}
       <div className="mb-4 flex items-center gap-2 sm:hidden overflow-x-auto scrollbar-none">
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setPage(1); }}>
           <SelectTrigger className="w-auto min-w-[120px] h-8 text-xs">
             <SlidersHorizontal className="h-3 w-3 mr-1" />
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {mockCategories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                {cat.name}
-              </SelectItem>
-            ))}
           </SelectContent>
         </Select>
 
@@ -163,12 +162,12 @@ export default function BookmarksPage() {
         </div>
       ) : view === 'grid' ? (
         <BookmarkGrid
-          bookmarks={bookmarks || []}
+          bookmarks={bookmarks}
           onEdit={handleEdit}
         />
       ) : (
         <BookmarkList
-          bookmarks={bookmarks || []}
+          bookmarks={bookmarks}
           onEdit={handleEdit}
           onSort={setSortBy}
           sortColumn={sortBy}
@@ -176,22 +175,38 @@ export default function BookmarksPage() {
       )}
 
       {/* Pagination */}
-      {(bookmarks?.length || 0) > 0 && (
+      {totalItems > 0 && (
         <div className="mt-8 flex items-center justify-between border-t border-border pt-4">
           <p className="text-sm text-text-tertiary">
-            Showing <span className="font-medium text-text-primary">{bookmarks?.length}</span> bookmarks
+            Showing <span className="font-medium text-text-primary">{bookmarks.length}</span> of{' '}
+            <span className="font-medium text-text-primary">{totalItems}</span> bookmarks
           </p>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
               Previous
             </Button>
-            <Button variant="outline" size="sm" className="bg-accent text-white border-accent">
-              1
-            </Button>
-            <Button variant="outline" size="sm">
-              2
-            </Button>
-            <Button variant="outline" size="sm">
+            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map((p) => (
+              <Button
+                key={p}
+                variant="outline"
+                size="sm"
+                className={p === page ? 'bg-accent text-white border-accent' : ''}
+                onClick={() => setPage(p)}
+              >
+                {p}
+              </Button>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
               Next
             </Button>
           </div>
