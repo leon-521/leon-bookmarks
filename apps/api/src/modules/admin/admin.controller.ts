@@ -98,4 +98,46 @@ export class AdminController {
   async deleteUser(@Param('id') id: string) {
     return this.adminService.deleteUser(id);
   }
+
+  // ══════ AI Provider Management ══════
+  @Get('ai-providers')
+  @ApiOperation({ summary: 'List all AI providers' })
+  async listAiProviders() {
+    return this.adminService.listAiProviders();
+  }
+
+  @Post('ai-providers')
+  @ApiOperation({ summary: 'Create a new AI provider' })
+  async createAiProvider(
+    @Body() dto: { name: string; baseUrl: string; apiKey: string; model?: string; isDefault?: boolean; description?: string },
+  ) {
+    return this.adminService.createAiProvider(dto);
+  }
+
+  @Patch('ai-providers/:id')
+  @ApiOperation({ summary: 'Update an AI provider' })
+  async updateAiProvider(
+    @Param('id') id: string,
+    @Body() dto: { name?: string; baseUrl?: string; apiKey?: string; model?: string; isDefault?: boolean; isActive?: boolean; description?: string },
+  ) {
+    return this.adminService.updateAiProvider(id, dto);
+  }
+
+  @Patch('ai-providers/:id/default')
+  @ApiOperation({ summary: 'Set an AI provider as the default' })
+  async setDefaultAiProvider(@Param('id') id: string) {
+    return this.adminService.setDefaultAiProvider(id);
+  }
+
+  @Delete('ai-providers/:id')
+  @ApiOperation({ summary: 'Delete an AI provider' })
+  async deleteAiProvider(@Param('id') id: string) {
+    return this.adminService.deleteAiProvider(id);
+  }
+
+  @Post('ai-providers/:id/test')
+  @ApiOperation({ summary: 'Test an AI provider connection' })
+  async testAiProvider(@Param('id') id: string) {
+    return this.adminService.testAiProvider(id);
+  }
 }

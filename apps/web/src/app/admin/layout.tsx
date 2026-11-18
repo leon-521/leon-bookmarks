@@ -3,13 +3,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, Building2, Users, BarChart3, ChevronLeft } from 'lucide-react';
+import { Shield, Building2, Users, BarChart3, ChevronLeft, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: BarChart3 },
   { href: '/admin/tenants', label: 'Tenants', icon: Building2 },
   { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin/ai-providers', label: 'AI Providers', icon: Brain },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

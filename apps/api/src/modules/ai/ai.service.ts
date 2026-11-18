@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 
 interface AiCategorySuggestion {
@@ -34,26 +33,45 @@ interface SimilarBookmark {
   reason: string;
 }
 
+interface AiProviderConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private openaiApiKey: string | undefined;
-  private openaiBaseUrl: string;
-  private model: string;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
   ) {
-    this.openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
-    this.openaiBaseUrl = this.configService.get<string>('OPENAI_BASE_URL', 'https://api.openai.com/v1');
-    this.model = this.configService.get<string>('OPENAI_MODEL', 'gpt-4o-mini');
-    
-    if (this.openaiApiKey) {
-      this.logger.log(`AI initialized with model: ${this.model}`);
-    } else {
-      this.logger.warn('OPENAI_API_KEY not set. AI runs in heuristic mode.');
+    this.logger.log('AI service initialized — provider config loaded from database');
+  }
+
+  /**
+   * Load AI provider config from database (the default active provider).
+   * Returns null if no active provider is configured.
+   */
+  private async getProviderConfig(): Promise<AiProviderConfig | null> {
+    // Try to find the default active provider first
+    let provider = await this.prisma.aiProvider.findFirst({
+      where: { isDefault: true, isActive: true },
+      select: { apiKey: true, baseUrl: true, model: true },
+    });
+    // Fallback to any active provider
+    if (!provider) {
+      provider = await this.prisma.aiProvider.findFirst({
+        where: { isActive: true },
+        select: { apiKey: true, baseUrl: true, model: true },
+        orderBy: { createdAt: 'asc' },
+      });
     }
+    return provider || null;
+  }
+
+  private get isAiEnabled(): Promise<boolean> {
+    return this.getProviderConfig().then(c => !!c);
   }
 
   // ═══════════════════════════════════════════
@@ -71,7 +89,8 @@ export class AiService {
       return { categoryId: null, categoryName: 'Uncategorized', confidence: 0, reason: 'No categories exist yet.' };
     }
 
-    if (this.openaiApiKey) {
+    const config = await this.getProviderConfig();
+    if (config) {
       return this.aiCategorize(categories, url, title, description);
     }
     return this.heuristicCategorize(categories, url, title, description);
@@ -171,7 +190,8 @@ If no category fits well, use categoryId: null and suggest a new category name.`
   // 2. Auto-generate tags
   // ═══════════════════════════════════════════
   async generateTags(url: string, title: string, description?: string): Promise<AiTagSuggestion> {
-    if (this.openaiApiKey) {
+    const config = await this.getProviderConfig();
+    if (config) {
       return this.aiGenerateTags(url, title, description);
     }
     return this.heuristicGenerateTags(url, title, description);
@@ -225,7 +245,8 @@ Respond in JSON format only:
   // 3. Summarize a webpage
   // ═══════════════════════════════════════════
   async summarize(url: string, title: string, description?: string): Promise<AiSummary> {
-    if (this.openaiApiKey) {
+    const config = await this.getProviderConfig();
+    if (config) {
       return this.aiSummarize(url, title, description);
     }
     return { description: description || `${title} - ${url}`, keywords: [] };
@@ -262,7 +283,8 @@ Respond in JSON format only:
       select: { id: true, title: true, url: true, description: true, tags: true },
     });
 
-    if (this.openaiApiKey && allBookmarks.length > 0) {
+    const config = await this.getProviderConfig();
+    if (config && allBookmarks.length > 0) {
       return this.aiFindSimilar(bookmark, allBookmarks, limit);
     }
     return this.heuristicFindSimilar(bookmark, allBookmarks, limit);
@@ -472,7 +494,8 @@ Respond in JSON format only - array of objects:
 
     const contextItems = matched.length > 0 ? matched : bookmarks.slice(0, 6);
 
-    if (this.openaiApiKey && contextItems.length > 0) {
+    const config = await this.getProviderConfig();
+    if (config && contextItems.length > 0) {
       const contextText = contextItems
         .map(
           (b, i) =>
@@ -570,7 +593,8 @@ Respond in JSON format only:
 
     const existingNames = new Set(existingCategories.map((c) => c.name.toLowerCase()));
 
-    if (this.openaiApiKey && bookmarks.length > 0) {
+    const config = await this.getProviderConfig();
+    if (config && bookmarks.length > 0) {
       const sample = bookmarks
         .slice(0, 60)
         .map((b) => `- (${b.id}) ${b.title} [${b.url}] tags:${b.tags.join(',')}`)
@@ -771,14 +795,19 @@ Respond in JSON format only:
   // LLM call helper
   // ═══════════════════════════════════════════
   private async callLLM(prompt: string): Promise<string> {
-    const response = await fetch(`${this.openaiBaseUrl}/chat/completions`, {
+    const config = await this.getProviderConfig();
+    if (!config) {
+      throw new Error('No active AI provider configured. Add one in Super Admin → AI Providers.');
+    }
+
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.openaiApiKey}`,
+        'Authorization': `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
-        model: this.model,
+        model: config.model,
         messages: [
           { role: 'system', content: 'You are a helpful bookmark organization assistant. Always respond with valid JSON only, no markdown.' },
           { role: 'user', content: prompt },

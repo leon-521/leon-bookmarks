@@ -176,4 +176,147 @@ export class AdminService {
     await this.prisma.user.delete({ where: { id } });
     return { deleted: true };
   }
+
+  // ══════════════════════════════════════════════
+  // AI Provider Management
+  // ══════════════════════════════════════════════
+  async listAiProviders() {
+    const providers = await this.prisma.aiProvider.findMany({
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        baseUrl: true,
+        apiKey: true,
+        model: true,
+        isDefault: true,
+        isActive: true,
+        description: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    // Mask API keys for security: show only last 4 chars
+    return providers.map((p) => ({
+      ...p,
+      apiKey: p.apiKey ? `${'*'.repeat(Math.max(0, p.apiKey.length - 4))}${p.apiKey.slice(-4)}` : '',
+    }));
+  }
+
+  async createAiProvider(data: {
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    model?: string;
+    isDefault?: boolean;
+    description?: string;
+  }) {
+    // If this is set as default, unset all others
+    if (data.isDefault) {
+      await this.prisma.aiProvider.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    return this.prisma.aiProvider.create({
+      data: {
+        name: data.name,
+        baseUrl: data.baseUrl,
+        apiKey: data.apiKey,
+        model: data.model || 'gpt-4o-mini',
+        isDefault: data.isDefault ?? false,
+        description: data.description,
+      },
+    });
+  }
+
+  async updateAiProvider(id: string, data: {
+    name?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    isDefault?: boolean;
+    isActive?: boolean;
+    description?: string;
+  }) {
+    const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
+    if (!provider) throw new NotFoundException('AI Provider not found');
+
+    // If setting as default, unset all others first
+    if (data.isDefault === true) {
+      await this.prisma.aiProvider.updateMany({
+        where: { isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+
+    return this.prisma.aiProvider.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.baseUrl !== undefined && { baseUrl: data.baseUrl }),
+        ...(data.apiKey !== undefined && { apiKey: data.apiKey }),
+        ...(data.model !== undefined && { model: data.model }),
+        ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+        ...(data.description !== undefined && { description: data.description }),
+      },
+    });
+  }
+
+  async setDefaultAiProvider(id: string) {
+    const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
+    if (!provider) throw new NotFoundException('AI Provider not found');
+
+    // Unset all defaults, then set this one
+    await this.prisma.aiProvider.updateMany({
+      where: { isDefault: true },
+      data: { isDefault: false },
+    });
+
+    return this.prisma.aiProvider.update({
+      where: { id },
+      data: { isDefault: true, isActive: true },
+    });
+  }
+
+  async deleteAiProvider(id: string) {
+    const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
+    if (!provider) throw new NotFoundException('AI Provider not found');
+    await this.prisma.aiProvider.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  async testAiProvider(id: string) {
+    const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
+    if (!provider) throw new NotFoundException('AI Provider not found');
+
+    try {
+      const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+          max_tokens: 10,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        return { success: false, status: response.status, error: errorBody };
+      }
+
+      const data = await response.json() as any;
+      const reply = data.choices?.[0]?.message?.content || '';
+      return { success: true, status: response.status, reply: reply.trim(), model: provider.model };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Connection failed' };
+    }
+  }
 }

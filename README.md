@@ -30,7 +30,7 @@
 | **团队协作** Team Collaboration | 基于角色的访问控制（管理员/编辑者/查看者）/ Role-based access (Admin / Editor / Viewer) |
 | **全文搜索** Full-Text Search | 由 Meilisearch 驱动的即时、容错搜索 / Instant, typo-tolerant search powered by Meilisearch |
 | **导入/导出** Import/Export | 从 Chrome/Firefox HTML 或 JSON 批量导入，导出为 HTML、JSON 或 CSV / Bulk import & export |
-| **AI 智能套件** AI Suite | 自动分类、智能标签、URL 摘要、对话式 Q&A (RAG)、AI 分类架构师、死链检测、去重 / Auto-categorization, smart tagging, URL summarization, conversational Q&A, dead-link health checks, duplicate cleanup |
+| **AI 智能套件** AI Suite | 自动分类、智能标签、URL 摘要、对话式 Q&A (RAG)、AI 分类架构师、死链检测、去重。**支持在超级管理后台自定义添加 AI 供应商**（OpenAI、DeepSeek、Moonshot、智谱、硅基流动、Ollama 等任何 OpenAI 兼容接口）/ Auto-categorization, smart tagging, URL summarization, conversational Q&A, dead-link health checks, duplicate cleanup. **Custom AI providers configurable via Super Admin dashboard** (OpenAI, DeepSeek, Moonshot, Zhipu, Silicon Flow, Ollama, or any OpenAI-compatible API) |
 | **超级管理员 & SaaS 计费** Super Admin & Billing | 平台级租户/用户管理 + Stripe Checkout 集成（带本地 Mock 回退）/ Platform-wide management + Stripe integration (with local mock fallback) |
 | **浏览器扩展** Browser Extension | Chrome/Edge Manifest V3 扩展，一键保存 + AI 智能填充 + 右键菜单 / One-click save + AI Smart Fill + context menu |
 | **响应式设计 & 暗色模式** Responsive & Dark Mode | 桌面、平板和移动端自适应，支持系统级暗色模式 / Beautiful across all devices with system-aware dark mode |
@@ -197,8 +197,7 @@ MEILI_MASTER_KEY=your-meili-master-key
 STRIPE_SECRET_KEY=sk_live_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 
-# 可选：AI 功能 / Optional: AI features
-OPENAI_API_KEY=sk-xxx
+# AI 供应商在超级管理后台配置 / AI providers are configured in Super Admin dashboard
 ```
 
 #### 3. 构建并启动 / Build & Start
@@ -317,6 +316,8 @@ docker compose exec api npx prisma studio            # 可视化管理 / Visual 
                                                        └───────────┘
 ```
 
+> **💡 AI 供应商管理 / AI Provider Management**: AI 配置不再需要环境变量，所有 AI 供应商（OpenAI、DeepSeek、Moonshot、Ollama 等）均可在超级管理后台动态添加、测试和切换。/ AI configuration no longer requires environment variables. All AI providers can be dynamically added, tested, and switched in the Super Admin dashboard.
+
 ---
 
 ## 🔧 环境变量 / Environment Variables
@@ -332,9 +333,7 @@ docker compose exec api npx prisma studio            # 可视化管理 / Visual 
 | `FRONTEND_URL` | 前端地址（CORS）/ Frontend URL for CORS | `http://localhost:3000` |
 | `PORT` | API 端口 / API port | `4000` |
 | `STRIPE_SECRET_KEY` | Stripe 密钥（可选）/ Stripe key (optional) | — (留空使用 Mock / empty for mock mode) |
-| `OPENAI_API_KEY` | AI API 密钥（可选）/ AI API key (optional) | — (留空使用启发式模式 / empty for heuristic mode) |
-| `OPENAI_BASE_URL` | AI API 地址 / AI API endpoint | `https://api.openai.com/v1` |
-| `OPENAI_MODEL` | AI 模型 / AI model | `gpt-4o-mini` |
+| — | AI 供应商配置已移至超级管理后台 / AI provider config is now managed in Super Admin → AI Providers | — |
 
 ### Web 前端 / Frontend
 
