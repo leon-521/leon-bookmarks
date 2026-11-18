@@ -65,7 +65,7 @@ services:
   # MinIO - Object Storage (S3-compatible)
   # ═══════════════════════════════════════════════
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
     container_name: lb-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

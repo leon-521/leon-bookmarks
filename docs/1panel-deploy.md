@@ -16,6 +16,56 @@
 
 ---
 
+## ⚠️ 第零步：配置 Docker 镜像加速（国内服务器必做）
+
+> 国内服务器无法直接访问 Docker Hub，必须先配置镜像加速源，否则会出现 `拉取镜像超时` 或 `not found` 错误。
+
+### 方法 A：通过 1Panel 面板配置（推荐）
+
+1. 登录 1Panel 面板
+2. 左侧菜单点击 **「容器」** → **「配置」**（或 **「设置」** → **「Docker 配置」**）
+3. 找到 **「镜像加速」** / **「Registry Mirrors」** 配置项
+4. 添加以下镜像加速地址（2026年11月实测可用）：
+
+```
+https://docker.1ms.run
+https://docker.xuanyuan.me
+https://docker.m.daocloud.io
+```
+
+5. 点击 **「保存」**，1Panel 会自动重启 Docker 服务
+
+### 方法 B：通过命令行配置
+
+在 1Panel 的 **「终端」** 中执行：
+
+```bash
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://docker.xuanyuan.me",
+    "https://docker.m.daocloud.io"
+  ]
+}
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+### 验证配置生效
+
+```bash
+docker info | grep -A 5 "Registry Mirrors"
+```
+
+应显示你配置的镜像加速地址。
+
+> **💡 如果镜像源失效**，请参考 [2026 最新可用 Docker 国内镜像源列表](https://cloud.tencent.com/developer/article/2485043) 更新地址。
+
+---
+
 ## 🚀 部署步骤
 
 ### 第一步：创建容器编排
@@ -31,6 +81,8 @@
 ### 第二步：粘贴 Docker Compose 配置
 
 将以下内容完整粘贴到编排编辑器中：
+
+> **💡 以下配置中所有镜像已使用国内源地址，无需科学上网即可拉取。**
 
 ```yaml
 services:
@@ -105,7 +157,7 @@ services:
   # MinIO - S3 兼容对象存储
   # ═══════════════════════════════════════════
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
     container_name: lb-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -146,7 +198,6 @@ services:
       MINIO_PORT: 9000
       MINIO_ACCESS_KEY: leonminio
       MINIO_SECRET_KEY: LeonMinio2024!Pass
-      # Stripe 和 AI 均在超级管理后台配置，无需环境变量
     ports:
       - "4000:4000"
     depends_on:
@@ -190,6 +241,9 @@ networks:
     driver: bridge
 ```
 
+> **⚠️ 关于 `build: context: https://github.com/...`**：  
+> Docker 会从 GitHub 拉取源码并在本地构建镜像。如果你的服务器无法访问 GitHub，请参阅下方 [「国内无法访问 GitHub 怎么办？」](#q-国内无法访问-github-怎么办) 章节。
+
 ### 第三步：修改关键配置
 
 在粘贴后，**必须修改以下配置项**（搜索 `⚠️` 标记的位置）：
@@ -217,13 +271,13 @@ networks:
 |---|---|---|
 | Web 前端 | `3000` | 主应用入口 |
 | API 后端 | `4000` | REST API |
-| PostgreSQL | `15432` | 数据库（已改为非标准端口避免冲突） |
-| Redis | `16379` | 缓存（已改为非标准端口避免冲突） |
+| PostgreSQL | `15432` | 数据库（非标准端口避免冲突） |
+| Redis | `16379` | 缓存（非标准端口避免冲突） |
 | Meilisearch | `17700` | 搜索引擎 |
 | MinIO API | `19000` | 对象存储 API |
 | MinIO Console | `19001` | 对象存储管理界面 |
 
-> **⚠️ 注意：** 如果 1Panel 的应用商店中已安装了 PostgreSQL 或 Redis，端口会冲突。  
+> **⚠️ 注意：** 如果 1Panel 应用商店中已安装了 PostgreSQL 或 Redis，端口会冲突。  
 > 本配置已将基础设施端口改为 `15432`、`16379` 等非标准端口，避免与 1Panel 内置应用冲突。  
 > 你也可以选择使用 1Panel 应用商店已安装的 PostgreSQL/Redis，只需删除对应的服务块并修改连接地址。
 
@@ -231,7 +285,7 @@ networks:
 
 1. 检查配置无误后，点击 **「确认」** 按钮
 2. 1Panel 将自动拉取镜像并构建、启动所有容器
-3. 等待提示 **「任务成功」**（首次构建约需 5-10 分钟）
+3. 等待提示 **「任务成功」**（首次构建约 5-10 分钟）
 
 ### 第六步：初始化数据库
 
@@ -391,12 +445,88 @@ docker exec -i lb-postgres psql -U postgres leon_bookmarks < backup_20241101.sql
 
 ## ❓ 常见问题
 
-### Q: 首次构建很慢怎么办？
+### Q: 拉取镜像超时 / `not found` 怎么办？
 
-A: 首次需要从 GitHub 拉取代码并构建 Docker 镜像（约 5-10 分钟）。如果网络较慢，可以先在本地构建好镜像后导入：
+A: 这是国内最常见的问题。**必须先配置 Docker 镜像加速源**，参考本文档 [第零步](#️-第零步配置-docker-镜像加速国内服务器必做)。
+
+如果配置了加速源仍然失败，尝试以下替代方案：
+
+**方案 1：手动拉取带前缀的镜像**
 
 ```bash
-# 在开发机上构建
+# 使用轩辕镜像代理手动拉取
+docker pull docker.xuanyuan.me/library/postgres:16-alpine
+docker tag docker.xuanyuan.me/library/postgres:16-alpine postgres:16-alpine
+
+docker pull docker.xuanyuan.me/library/redis:7-alpine
+docker tag docker.xuanyuan.me/library/redis:7-alpine redis:7-alpine
+
+docker pull docker.xuanyuan.me/getmeili/meilisearch:v1.6
+docker tag docker.xuanyuan.me/getmeili/meilisearch:v1.6 getmeili/meilisearch:v1.6
+
+docker pull docker.xuanyuan.me/minio/minio:RELEASE.2024-11-07T00-52-20Z
+docker tag docker.xuanyuan.me/minio/minio:RELEASE.2024-11-07T00-52-20Z minio/minio:RELEASE.2024-11-07T00-52-20Z
+
+docker pull docker.xuanyuan.me/library/node:20-alpine
+docker tag docker.xuanyuan.me/library/node:20-alpine node:20-alpine
+```
+
+> 拉取完成后再回到 1Panel 编排页面重新部署。
+
+**方案 2：在 Docker Compose 中直接使用镜像代理前缀**
+
+将 `image` 字段加上代理前缀，例如：
+```yaml
+# 原始
+image: postgres:16-alpine
+# 改为（官方镜像加 library/ 前缀）
+image: docker.xuanyuan.me/library/postgres:16-alpine
+
+# 原始
+image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+# 改为（第三方镜像保持原路径）
+image: docker.xuanyuan.me/minio/minio:RELEASE.2024-11-07T00-52-20Z
+```
+
+> **镜像前缀规则：**  
+> - 官方镜像（如 `postgres`、`redis`、`node`）→ 加 `library/` 前缀：`docker.xuanyuan.me/library/postgres:16-alpine`  
+> - 第三方镜像（如 `getmeili/meilisearch`、`minio/minio`）→ 保持路径：`docker.xuanyuan.me/getmeili/meilisearch:v1.6`
+
+### Q: 国内无法访问 GitHub 怎么办？
+
+A: `api` 和 `web` 服务使用 `build: context: https://github.com/...` 从 GitHub 拉取源码构建。如果无法访问 GitHub：
+
+**方案 1：用 Gitee 镜像（推荐）**
+
+先在 [Gitee](https://gitee.com/) 上导入仓库 `https://github.com/leon-521/leon-bookmarks`，然后修改 Docker Compose 中的 `context`：
+
+```yaml
+api:
+  build:
+    context: https://gitee.com/你的用户名/leon-bookmarks.git#feat/bookmark-nav-v1
+    dockerfile: apps/api/Dockerfile
+```
+
+**方案 2：本地克隆后构建**
+
+```bash
+# 在服务器上克隆（可用 gitee 镜像）
+cd /opt
+git clone https://github.com/leon-521/leon-bookmarks.git
+cd leon-bookmarks
+git checkout feat/bookmark-nav-v1
+
+# 修改 Docker Compose 中 build context 为本地路径
+# context: https://github.com/... 改为 context: /opt/leon-bookmarks
+```
+
+**方案 3：在开发机预构建镜像后导入**
+
+```bash
+# 在能访问 GitHub 的开发机上构建
+git clone https://github.com/leon-521/leon-bookmarks.git
+cd leon-bookmarks && git checkout feat/bookmark-nav-v1
+
 docker build -t leon-bookmarks-api -f apps/api/Dockerfile .
 docker build -t leon-bookmarks-web -f apps/web/Dockerfile .
 
@@ -404,7 +534,7 @@ docker build -t leon-bookmarks-web -f apps/web/Dockerfile .
 docker save leon-bookmarks-api | gzip > api.tar.gz
 docker save leon-bookmarks-web | gzip > web.tar.gz
 
-# 在服务器上导入
+# 上传到服务器后导入
 docker load < api.tar.gz
 docker load < web.tar.gz
 ```
@@ -413,11 +543,11 @@ docker load < web.tar.gz
 ```yaml
 api:
   image: leon-bookmarks-api:latest
-  # 删除 build 块
+  # 删除整个 build 块
 
 web:
   image: leon-bookmarks-web:latest
-  # 删除 build 块
+  # 删除整个 build 块
 ```
 
 ### Q: 端口被占用？
