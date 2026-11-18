@@ -28,6 +28,7 @@ COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/apps/api/tsconfig.json ./apps/api/tsconfig.json
 
 WORKDIR /app/apps/api
+RUN node -e "require.resolve('express'); require.resolve('@nestjs/core')"
 
 EXPOSE 4000
 
