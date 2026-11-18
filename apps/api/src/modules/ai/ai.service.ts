@@ -1,31 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
-interface AiCategorySuggestion {
+export interface AiCategorySuggestion {
   categoryId: string | null;
   categoryName: string;
   confidence: number;
   reason: string;
 }
 
-interface AiTagSuggestion {
+export interface AiTagSuggestion {
   tags: string[];
   reason: string;
 }
 
-interface AiSummary {
+export interface AiSummary {
   description: string;
   keywords: string[];
 }
 
-interface AiOrganizeResult {
+export interface AiOrganizeResult {
   processed: number;
   categorized: number;
   tagged: number;
   suggestions: { bookmarkId: string; title: string; suggestedCategory: string; suggestedTags: string[] }[];
 }
 
-interface SimilarBookmark {
+export interface SimilarBookmark {
   id: string;
   title: string;
   url: string;
