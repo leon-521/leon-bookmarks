@@ -12,9 +12,11 @@ A modern, beautiful bookmark navigation platform that allows organizations and i
 - **Multiple Layouts** — Card grid, compact list, or sidebar navigation views
 - **Team Collaboration** — Invite members with role-based access (Admin / Editor / Viewer)
 - **Full-Text Search** — Instant, typo-tolerant search powered by Meilisearch
-- **Import/Export** — Bulk import from Chrome, Firefox, or JSON/CSV files
-- **Responsive Design** — Beautiful on desktop, tablet, and mobile
-- **Dark Mode** — System-aware or manual theme switching
+- **Import/Export** — Bulk import from Chrome/Firefox HTML or JSON, and export to HTML, JSON, or CSV
+- **AI Intelligence Suite** — Dual-engine (OpenAI-compatible LLM + zero-config heuristic fallback) for auto-categorization, smart tagging, URL summarization, conversational workspace Q&A (RAG), AI taxonomy architect, dead-link health checks with Wayback Machine snapshots, and duplicate cleanup
+- **Super Admin & SaaS Billing** — Platform-wide tenant/user management console + Stripe Checkout, Customer Portal & Webhook integration (with local mock fallback)
+- **Browser Extension (Manifest V3)** — One-click Chrome/Edge extension with AI Smart Fill and right-click context menu saving
+- **Responsive Design & Dark Mode** — Beautiful across desktop, tablet, and mobile with system-aware dark mode
 
 ## 🏗️ Tech Stack
 
@@ -89,13 +91,14 @@ This starts:
 
 ## 📝 Environment Variables
 
-See `apps/api/.env.example` for all required environment variables.
+See `apps/api/.env.example` for all required environment variables (including optional Stripe and OpenAI-compatible AI settings).
 
 ## 🗺️ Roadmap
 
-- [x] Phase 1 — MVP: Auth, Bookmarks CRUD, Categories, Navigation Page
-- [ ] Phase 2 — Enhancement: Themes, Tags, Import/Export, Dark Mode, Members
-- [ ] Phase 3 — Commercial: Plans, Billing, Custom Domains, Browser Extension
+- [x] Phase 1 — MVP: Multi-tenant Auth, Bookmarks CRUD, Categories, Public Navigation Portal
+- [x] Phase 2 — Enhancement: Themes, Drag-and-Drop Sorting, HTML/JSON/CSV Import & Export, Dark Mode, Team Members RBAC
+- [x] Phase 3 — Commercial: Super Admin Console, Plans & Stripe Billing, Browser Extension (MV3)
+- [x] Phase 4 — AI Native: Auto-Categorize & Tagging, Conversational Copilot Q&A, Taxonomy Architect, Link Health & Deduplication
 
 ## 📄 License
 

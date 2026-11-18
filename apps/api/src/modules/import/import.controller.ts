@@ -1,12 +1,14 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ImportService } from './import.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,13 +29,14 @@ class ImportJsonDto {
 
 @ApiTags('import')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.EDITOR)
+@UseGuards(JwtAuthGuard)
 @Controller('import')
 export class ImportController {
   constructor(private readonly importService: ImportService) {}
 
   @Post('html')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Import bookmarks from Chrome/Firefox HTML export' })
   async importHtml(
@@ -49,6 +52,8 @@ export class ImportController {
   }
 
   @Post('json')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Import bookmarks from JSON format' })
   async importJson(
@@ -57,5 +62,15 @@ export class ImportController {
     @Body() dto: ImportJsonDto,
   ) {
     return this.importService.importFromJson(tenantId, userId, dto.content);
+  }
+
+  @Get('export')
+  @ApiOperation({ summary: 'Export bookmarks in HTML, JSON, or CSV format' })
+  async exportBookmarks(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('format') format?: 'html' | 'json' | 'csv',
+  ) {
+    const validFormat = format && ['html', 'json', 'csv'].includes(format) ? format : 'html';
+    return this.importService.exportBookmarks(tenantId, validFormat);
   }
 }

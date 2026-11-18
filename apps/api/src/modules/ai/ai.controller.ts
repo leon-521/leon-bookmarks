@@ -60,4 +60,37 @@ export class AiController {
   async detectDuplicates(@CurrentUser('tenantId') tenantId: string) {
     return this.aiService.detectDuplicates(tenantId);
   }
+
+  @Post('ask')
+  @ApiOperation({ summary: 'Conversational AI Q&A over workspace bookmarks' })
+  async askWorkspace(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { question: string },
+  ) {
+    return this.aiService.askWorkspace(tenantId, body.question || '');
+  }
+
+  @Post('taxonomy/suggest')
+  @ApiOperation({ summary: 'AI suggest category taxonomy structure for workspace' })
+  async suggestTaxonomy(@CurrentUser('tenantId') tenantId: string) {
+    return this.aiService.suggestTaxonomy(tenantId);
+  }
+
+  @Post('taxonomy/apply')
+  @ApiOperation({ summary: 'Apply AI suggested taxonomy categories and assignments' })
+  async applyTaxonomy(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { proposals: { name: string; icon?: string; bookmarkIds?: string[] }[] },
+  ) {
+    return this.aiService.applyTaxonomy(tenantId, body.proposals || []);
+  }
+
+  @Post('health-check')
+  @ApiOperation({ summary: 'Batch check bookmark URL health and get AI broken-link suggestions' })
+  async healthCheck(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { limit?: number },
+  ) {
+    return this.aiService.checkLinksHealth(tenantId, body?.limit ?? 25);
+  }
 }

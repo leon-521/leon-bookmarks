@@ -35,7 +35,19 @@ class ApiClient {
       throw new ApiError(response.status, message);
     }
     if (response.status === 204) return undefined as T;
-    return response.json();
+    const json = await response.json();
+    if (
+      json &&
+      typeof json === 'object' &&
+      'data' in json &&
+      'meta' in json &&
+      json.meta &&
+      typeof json.meta === 'object' &&
+      !('total' in json.meta)
+    ) {
+      return json.data as T;
+    }
+    return json as T;
   }
 
   async get<T>(path: string, config?: RequestConfig): Promise<T> {

@@ -151,6 +151,28 @@ body::-webkit-scrollbar-thumb:hover {
   color: #fff;
 }
 
+.btn-ai {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: hsla(222, 80%, 56%, 0.1);
+  border: 1px solid hsla(222, 80%, 56%, 0.25);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.btn-ai:hover:not(:disabled) {
+  background: hsla(222, 80%, 56%, 0.18);
+  transform: translateY(-1px);
+}
+.btn-ai:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* ---- Form Fields ---- */
 .field {
   margin-bottom: 12px;

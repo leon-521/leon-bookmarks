@@ -7,12 +7,22 @@ export { portalService } from './portal.service';
 export type { LoginRequest, RegisterRequest, AuthResponse, MeResponse } from './auth.service';
 export type { Bookmark, BookmarkFilters, PaginatedResponse, CreateBookmarkData, UpdateBookmarkData } from './bookmark.service';
 export type { Category, CreateCategoryData, UpdateCategoryData } from './category.service';
-export type { Tenant, UpdateTenantData, UpdateThemeData } from './tenant.service';
+export type { Tenant, UpdateTenantData, UpdateThemeData, WorkspaceMember, WorkspaceMembersResponse } from './tenant.service';
 export type { PortalData } from './portal.service';
 export { importService } from './import.service';
-export type { ImportResult, ImportHtmlOptions } from './import.service';
+export type { ImportResult, ImportHtmlOptions, ExportResult } from './import.service';
 export { adminService } from './admin.service';
 export { billingService } from './billing.service';
 export type { PricingPlan, SubscriptionInfo } from './billing.service';
 export { aiService } from './ai.service';
-export type { AiCategorySuggestion, AiTagSuggestion, AiSummary, AiOrganizeResult, SimilarBookmark, DuplicateGroup } from './ai.service';
+export type {
+  AiCategorySuggestion,
+  AiTagSuggestion,
+  AiSummary,
+  AiOrganizeResult,
+  SimilarBookmark,
+  DuplicateGroup,
+  AiAskResponse,
+  TaxonomyProposal,
+  HealthCheckResult,
+} from './ai.service';

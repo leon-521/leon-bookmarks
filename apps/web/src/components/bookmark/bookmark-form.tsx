@@ -4,8 +4,9 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Globe, X, Loader2 } from 'lucide-react';
+import { Globe, X, Loader2, Sparkles, Wand2, Tags, FolderTree } from 'lucide-react';
 import { api } from '@/lib/api';
+import { aiService } from '@/lib/services';
 import {
   Dialog,
   DialogContent,
@@ -24,13 +25,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { api } from '@/lib/api';
 
 const bookmarkSchema = z.object({
   url: z.string().url('Please enter a valid URL'),
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(500).optional(),
-  categoryId: z.string().min(1, 'Please select a category'),
+  categoryId: z.string().optional(),
 });
 
 type BookmarkFormData = z.infer<typeof bookmarkSchema>;
@@ -53,6 +53,8 @@ export function BookmarkForm({
   const [tags, setTags] = React.useState<string[]>(defaultValues?.tags || []);
   const [tagInput, setTagInput] = React.useState('');
   const [isFetchingMeta, setIsFetchingMeta] = React.useState(false);
+  const [aiLoading, setAiLoading] = React.useState<string | null>(null);
+  const [aiHint, setAiHint] = React.useState<string | null>(null);
   const [faviconUrl, setFaviconUrl] = React.useState<string | null>(null);
 
   const {
@@ -74,9 +76,25 @@ export function BookmarkForm({
 
   const url = watch('url');
   const title = watch('title');
+  const description = watch('description');
+  const selectedCategoryId = watch('categoryId');
+
+  React.useEffect(() => {
+    if (open) {
+      reset({
+        url: defaultValues?.url || '',
+        title: defaultValues?.title || '',
+        description: defaultValues?.description || '',
+        categoryId: defaultValues?.categoryId || '',
+      });
+      setTags(defaultValues?.tags || []);
+      setTagInput('');
+      setAiHint(null);
+    }
+  }, [open, reset, defaultValues]);
 
   const fetchMeta = async (targetUrl: string) => {
-    if (!targetUrl || title) return;
+    if (!targetUrl) return;
     try {
       new URL(targetUrl);
     } catch {
@@ -84,15 +102,20 @@ export function BookmarkForm({
     }
     setIsFetchingMeta(true);
     try {
-      const meta = await api.post<{ title?: string; description?: string; favicon?: string }>('/meta/scrape', { url: targetUrl });
+      const meta = await api.post<{
+        title?: string | null;
+        description?: string | null;
+        faviconUrl?: string | null;
+        favicon?: string | null;
+      }>('/meta/scrape', { url: targetUrl });
       if (meta.title && !watch('title')) {
         setValue('title', meta.title);
       }
       if (meta.description && !watch('description')) {
         setValue('description', meta.description);
       }
-      if (meta.favicon) {
-        setFaviconUrl(meta.favicon);
+      if (meta.faviconUrl || meta.favicon) {
+        setFaviconUrl(meta.faviconUrl || meta.favicon || null);
       }
     } catch {
       // Silently ignore meta fetch errors
@@ -101,13 +124,102 @@ export function BookmarkForm({
     }
   };
 
-  React.useEffect(() => {
-    if (!open) {
-      reset();
-      setTags(defaultValues?.tags || []);
-      setTagInput('');
+  const handleAiCategorize = async () => {
+    if (!url || !title) return;
+    setAiLoading('categorize');
+    try {
+      const res = await aiService.categorize({ url, title, description });
+      if (res.categoryId) {
+        setValue('categoryId', res.categoryId);
+        setAiHint(`AI 推荐分类「${res.categoryName}」(置信度 ${Math.round(res.confidence * 100)}%)`);
+      } else {
+        setAiHint(res.reason || '未找到高置信度匹配分类');
+      }
+    } catch {
+      setAiHint('AI 分类暂时不可用');
+    } finally {
+      setAiLoading(null);
     }
-  }, [open, reset, defaultValues?.tags]);
+  };
+
+  const handleAiTags = async () => {
+    if (!url || !title) return;
+    setAiLoading('tags');
+    try {
+      const res = await aiService.generateTags({ url, title, description });
+      if (res.tags?.length) {
+        setTags((prev) => Array.from(new Set([...prev, ...res.tags])));
+        setAiHint(`已生成 ${res.tags.length} 个推荐标签`);
+      }
+    } catch {
+      setAiHint('AI 标签生成失败');
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const handleAiSummarize = async () => {
+    if (!url || !title) return;
+    setAiLoading('summarize');
+    try {
+      const res = await aiService.summarize({ url, title, description });
+      if (res.description) {
+        setValue('description', res.description);
+        setAiHint('已由 AI 生成精炼摘要');
+      }
+    } catch {
+      setAiHint('AI 摘要生成失败');
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const handleAiSmartFillAll = async () => {
+    if (!url) return;
+    setAiLoading('all');
+    try {
+      let currentTitle = watch('title');
+      let currentDesc = watch('description');
+
+      if (!currentTitle) {
+        const meta = await api
+          .post<{ title?: string | null; description?: string | null; faviconUrl?: string | null }>(
+            '/meta/scrape',
+            { url },
+          )
+          .catch(() => null);
+        if (meta?.title) {
+          currentTitle = meta.title;
+          setValue('title', meta.title);
+        }
+        if (meta?.description && !currentDesc) {
+          currentDesc = meta.description;
+          setValue('description', meta.description);
+        }
+        if (meta?.faviconUrl) setFaviconUrl(meta.faviconUrl);
+      }
+
+      const effectiveTitle = currentTitle || url;
+      const [catRes, tagRes, sumRes] = await Promise.all([
+        aiService.categorize({ url, title: effectiveTitle, description: currentDesc }).catch(() => null),
+        aiService.generateTags({ url, title: effectiveTitle, description: currentDesc }).catch(() => null),
+        !currentDesc
+          ? aiService.summarize({ url, title: effectiveTitle }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      if (catRes?.categoryId) setValue('categoryId', catRes.categoryId);
+      if (tagRes?.tags?.length) {
+        setTags((prev) => Array.from(new Set([...prev, ...tagRes.tags])));
+      }
+      if (sumRes?.description && !watch('description')) {
+        setValue('description', sumRes.description);
+      }
+      setAiHint('✨ AI 已完成智能分类、标签与元数据补全');
+    } finally {
+      setAiLoading(null);
+    }
+  };
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -125,15 +237,23 @@ export function BookmarkForm({
   };
 
   const handleFormSubmit = (data: BookmarkFormData) => {
-    onSubmit({ ...data, tags });
+    onSubmit({
+      ...data,
+      categoryId: data.categoryId && data.categoryId !== 'none' ? data.categoryId : undefined,
+      tags,
+    });
   };
 
   const [apiCategories, setApiCategories] = React.useState<any[]>([]);
   React.useEffect(() => {
-    api.get<any>('/categories/tree').then((res) => {
-      setApiCategories(res.data || res || []);
-    }).catch(() => {});
-  }, []);
+    if (!open) return;
+    api
+      .get<any>('/categories/tree')
+      .then((res) => {
+        setApiCategories(Array.isArray(res) ? res : res?.data || []);
+      })
+      .catch(() => {});
+  }, [open]);
 
   const flatCategories = React.useMemo(() => {
     const flat: { id: string; name: string; depth: number }[] = [];
@@ -157,7 +277,7 @@ export function BookmarkForm({
           <DialogDescription>
             {defaultValues?.url
               ? 'Update the bookmark details below.'
-              : 'Save a new bookmark to your collection.'}
+              : 'Save a new bookmark or let AI auto-fill metadata, category, and tags.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -172,7 +292,7 @@ export function BookmarkForm({
                 error={errors.url?.message}
                 {...register('url', {
                   onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
-                    fetchMeta(e.target.value);
+                    if (!watch('title')) fetchMeta(e.target.value);
                   },
                 })}
               />
@@ -182,17 +302,39 @@ export function BookmarkForm({
                 </div>
               )}
             </div>
-            {url && !errors.url && (
-              <div className="flex items-center gap-2 px-1">
-                <img
-                  src={faviconUrl || `https://www.google.com/s2/favicons?domain=${url}&sz=16`}
-                  alt=""
-                  className="h-4 w-4 rounded-sm"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-                <span className="text-xs text-text-tertiary">Favicon preview</span>
+
+            {/* AI Smart Assist Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex items-center gap-2">
+                {url && !errors.url && (
+                  <img
+                    src={faviconUrl || `https://www.google.com/s2/favicons?domain=${url}&sz=16`}
+                    alt=""
+                    className="h-4 w-4 rounded-sm"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                )}
+                {aiHint ? (
+                  <span className="text-xs text-accent font-medium">{aiHint}</span>
+                ) : (
+                  <span className="text-xs text-text-tertiary">粘贴网址后可一键 AI 智能填充</span>
+                )}
               </div>
-            )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!url || !!aiLoading}
+                loading={aiLoading === 'all'}
+                onClick={handleAiSmartFillAll}
+                className="h-7 px-2.5 text-xs gap-1"
+              >
+                <Sparkles className="h-3 w-3 text-accent" />
+                AI 一键补全
+              </Button>
+            </div>
           </div>
 
           {/* Title */}
@@ -203,13 +345,26 @@ export function BookmarkForm({
             {...register('title')}
           />
 
-          {/* Description */}
+          {/* Description + AI Summarize */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-text-primary">
-              Description
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-text-primary">Description</label>
+              <button
+                type="button"
+                disabled={!url || !title || !!aiLoading}
+                onClick={handleAiSummarize}
+                className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover disabled:opacity-40 transition-colors"
+              >
+                {aiLoading === 'summarize' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3 w-3" />
+                )}
+                AI 生成摘要
+              </button>
+            </div>
             <textarea
-              className="flex min-h-[80px] w-full rounded-lg border border-border bg-bg-primary px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none"
+              className="flex min-h-[76px] w-full rounded-lg border border-border bg-bg-primary px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent resize-none"
               placeholder="A brief description of this bookmark..."
               {...register('description')}
             />
@@ -218,47 +373,76 @@ export function BookmarkForm({
             )}
           </div>
 
-          {/* Category */}
+          {/* Category + AI Auto Categorize */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-text-primary">
-              Category
-            </label>
-            <Select onValueChange={(value) => setValue('categoryId', value)} defaultValue={defaultValues?.categoryId}>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-text-primary">Category</label>
+              <button
+                type="button"
+                disabled={!url || !title || !!aiLoading}
+                onClick={handleAiCategorize}
+                className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover disabled:opacity-40 transition-colors"
+              >
+                {aiLoading === 'categorize' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <FolderTree className="h-3 w-3" />
+                )}
+                AI 自动分类
+              </button>
+            </div>
+            <Select
+              value={selectedCategoryId || 'none'}
+              onValueChange={(value) => setValue('categoryId', value === 'none' ? '' : value)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">Uncategorized</SelectItem>
                 {flatCategories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
-                    <span style={{ paddingLeft: cat.depth * 16 }}>{cat.name}</span>
+                    <span style={{ paddingLeft: cat.depth * 14 }}>{cat.name}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.categoryId && (
-              <p className="mt-1.5 text-xs text-danger">{errors.categoryId.message}</p>
-            )}
           </div>
 
-          {/* Tags */}
+          {/* Tags + AI Auto Tags */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-text-primary">
-              Tags
-            </label>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {tags.map((tag) => (
-                <Badge key={tag} variant="default" className="gap-1 pr-1">
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTag(tag)}
-                    className="rounded-full p-0.5 hover:bg-accent/20 transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-text-primary">Tags</label>
+              <button
+                type="button"
+                disabled={!url || !title || !!aiLoading}
+                onClick={handleAiTags}
+                className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover disabled:opacity-40 transition-colors"
+              >
+                {aiLoading === 'tags' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Tags className="h-3 w-3" />
+                )}
+                AI 推荐标签
+              </button>
             </div>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {tags.map((tag) => (
+                  <Badge key={tag} variant="default" className="gap-1 pr-1">
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="rounded-full p-0.5 hover:bg-accent/20 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
             <Input
               placeholder="Type a tag and press Enter"
               value={tagInput}

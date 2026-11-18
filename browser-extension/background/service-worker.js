@@ -19,10 +19,55 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'save-bookmark') {
-    // Open popup (can't programmatically open popup, so we just open it)
-    // The user will need to click the extension icon
-    // We could use a side panel in the future
-    console.log('Context menu clicked for:', info.linkUrl || tab?.url);
+  if (info.menuItemId !== 'save-bookmark') return;
+  const targetUrl = info.linkUrl || tab?.url;
+  const targetTitle = info.selectionText || tab?.title || targetUrl;
+  if (!targetUrl) return;
+
+  try {
+    const stored = await chrome.storage.local.get(['token', 'apiUrl']);
+    const token = stored.token;
+    const apiUrl = (stored.apiUrl || 'http://localhost:4000/api').replace(/\/$/, '');
+    if (!token) return;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Attempt AI auto-categorize & tags before saving
+    let categoryId;
+    let tags = [];
+    try {
+      const [catRes, tagRes] = await Promise.all([
+        fetch(`${apiUrl}/ai/categorize`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ url: targetUrl, title: targetTitle }),
+        }).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${apiUrl}/ai/tags`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ url: targetUrl, title: targetTitle }),
+        }).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      const catData = catRes?.data || catRes;
+      const tagData = tagRes?.data || tagRes;
+      if (catData?.categoryId) categoryId = catData.categoryId;
+      if (Array.isArray(tagData?.tags)) tags = tagData.tags;
+    } catch {}
+
+    await fetch(`${apiUrl}/bookmarks`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        url: targetUrl,
+        title: targetTitle,
+        categoryId,
+        tags,
+      }),
+    });
+  } catch (err) {
+    console.error('Failed to quick-save bookmark:', err);
   }
 });

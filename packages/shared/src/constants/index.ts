@@ -6,7 +6,7 @@ export const PLAN_LIMITS = {
 
 export const SUPPORTED_IMPORT_FORMATS = ['html', 'json', 'csv'] as const;
 
-export const DEFAULT_THEME: import('./types').ThemeConfig = {
+export const DEFAULT_THEME: import('../types').ThemeConfig = {
   colorScheme: 'system',
   accentColor: 'hsl(222, 80%, 56%)',
   backgroundColor: 'hsl(220, 16%, 98%)',

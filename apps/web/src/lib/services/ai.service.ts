@@ -44,6 +44,44 @@ export interface DuplicateGroup {
   reason: string;
 }
 
+export interface AiAskResponse {
+  answer: string;
+  sources: {
+    id: string;
+    title: string;
+    url: string;
+    categoryName: string | null;
+    tags: string[];
+  }[];
+  followUps: string[];
+  mode: 'llm' | 'heuristic';
+}
+
+export interface TaxonomyProposal {
+  name: string;
+  icon: string;
+  description: string;
+  bookmarkIds: string[];
+  matchCount: number;
+  alreadyExists: boolean;
+}
+
+export interface HealthCheckResult {
+  checked: number;
+  healthyCount: number;
+  brokenCount: number;
+  results: {
+    id: string;
+    title: string;
+    url: string;
+    healthy: boolean;
+    httpStatus: number | null;
+    latencyMs: number;
+    waybackUrl?: string;
+    aiAlternative?: string;
+  }[];
+}
+
 export const aiService = {
   categorize: (data: { url: string; title: string; description?: string }) =>
     api.post<AiCategorySuggestion>('/ai/categorize', data),
@@ -57,4 +95,12 @@ export const aiService = {
     api.post<AiOrganizeResult>('/ai/organize', { autoApply }),
   detectDuplicates: () =>
     api.get<{ groups: DuplicateGroup[] }>('/ai/duplicates'),
+  ask: (question: string) =>
+    api.post<AiAskResponse>('/ai/ask', { question }),
+  suggestTaxonomy: () =>
+    api.post<{ proposals: TaxonomyProposal[] }>('/ai/taxonomy/suggest'),
+  applyTaxonomy: (proposals: { name: string; icon?: string; bookmarkIds?: string[] }[]) =>
+    api.post<{ createdCategories: number; assignedBookmarks: number }>('/ai/taxonomy/apply', { proposals }),
+  healthCheck: (limit?: number) =>
+    api.post<HealthCheckResult>('/ai/health-check', { limit }),
 };

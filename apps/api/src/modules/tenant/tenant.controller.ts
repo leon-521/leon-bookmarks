@@ -1,7 +1,9 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -20,18 +22,65 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
-  @Get(':id')
+  @Get('members')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get tenant by ID' })
-  async findOne(@Param('id') id: string) {
-    return this.tenantService.findOne(id);
+  @ApiOperation({ summary: 'List members in the current workspace' })
+  async listMembers(@CurrentUser('tenantId') tenantId: string) {
+    return this.tenantService.listMembers(tenantId);
+  }
+
+  @Post('members/invite')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite a new member to the current workspace' })
+  async inviteMember(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { email: string; name: string; role?: Role; password?: string },
+  ) {
+    return this.tenantService.inviteMember(tenantId, body);
+  }
+
+  @Patch('members/:memberId/role')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a workspace member role' })
+  async updateMemberRole(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @Param('memberId') memberId: string,
+    @Body('role') role: Role,
+  ) {
+    return this.tenantService.updateMemberRole(tenantId, userId, memberId, role);
+  }
+
+  @Delete('members/:memberId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove a member from the workspace' })
+  async removeMember(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @Param('memberId') memberId: string,
+  ) {
+    return this.tenantService.removeMember(tenantId, userId, memberId);
   }
 
   @Get('slug/:slug')
   @ApiOperation({ summary: 'Get public tenant info by slug' })
   async findBySlug(@Param('slug') slug: string) {
     return this.tenantService.findBySlug(slug);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get tenant by ID' })
+  async findOne(@Param('id') id: string) {
+    return this.tenantService.findOne(id);
   }
 
   @Patch(':id')

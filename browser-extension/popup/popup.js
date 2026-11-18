@@ -52,7 +52,11 @@ async function apiRequest(method, path, body) {
   }
 
   if (res.status === 204) return null;
-  return res.json();
+  const json = await res.json();
+  if (json && typeof json === 'object' && 'data' in json && 'meta' in json && !('total' in json.meta)) {
+    return json.data;
+  }
+  return json;
 }
 
 // Login
@@ -129,6 +133,54 @@ logoutBtn.addEventListener('click', async () => {
   await chrome.storage.local.remove(['token', 'user', 'tenant']);
   showLoginView();
 });
+
+// AI Smart Fill
+const aiFillBtn = document.getElementById('aiFillBtn');
+if (aiFillBtn) {
+  aiFillBtn.addEventListener('click', async () => {
+    const url = document.getElementById('bookmarkUrl').value.trim();
+    const title = document.getElementById('bookmarkTitle').value.trim();
+    const descEl = document.getElementById('bookmarkDesc');
+    if (!url || !title) {
+      saveError.textContent = 'Please fill in URL and Title first.';
+      saveError.style.display = 'block';
+      return;
+    }
+
+    aiFillBtn.disabled = true;
+    aiFillBtn.textContent = '✨ Analyzing...';
+    saveError.style.display = 'none';
+
+    try {
+      const payload = { url, title, description: descEl.value.trim() || undefined };
+      const [catRes, tagRes, sumRes] = await Promise.allSettled([
+        apiRequest('POST', '/ai/categorize', payload),
+        apiRequest('POST', '/ai/tags', payload),
+        apiRequest('POST', '/ai/summarize', payload),
+      ]);
+
+      if (catRes.status === 'fulfilled' && catRes.value?.categoryId) {
+        document.getElementById('bookmarkCategory').value = catRes.value.categoryId;
+      }
+      if (tagRes.status === 'fulfilled' && Array.isArray(tagRes.value?.tags) && tagRes.value.tags.length > 0) {
+        document.getElementById('bookmarkTags').value = tagRes.value.tags.join(', ');
+      }
+      if (sumRes.status === 'fulfilled' && sumRes.value?.description && !descEl.value.trim()) {
+        descEl.value = sumRes.value.description;
+      }
+      aiFillBtn.textContent = '✨ Filled!';
+      setTimeout(() => {
+        aiFillBtn.textContent = '✨ AI Smart Fill';
+      }, 1500);
+    } catch (err) {
+      saveError.textContent = err.message || 'AI Smart Fill failed';
+      saveError.style.display = 'block';
+      aiFillBtn.textContent = '✨ AI Smart Fill';
+    } finally {
+      aiFillBtn.disabled = false;
+    }
+  });
+}
 
 // View switching
 async function showSaveView() {

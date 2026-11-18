@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, LayoutGrid, List, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/bookmark/search-bar';
@@ -15,7 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useBookmarks } from '@/hooks/use-bookmarks';
+import {
+  useBookmarks,
+  useCreateBookmark,
+  useUpdateBookmark,
+  useDeleteBookmark,
+} from '@/hooks/use-bookmarks';
+import { useCategories } from '@/hooks/use-categories';
 import { cn } from '@/lib/utils';
 
 export default function BookmarksPage() {
@@ -27,27 +34,75 @@ export default function BookmarksPage() {
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingBookmark, setEditingBookmark] = React.useState<any | null>(null);
 
+  const { data: categories } = useCategories();
+  const createBookmark = useCreateBookmark();
+  const updateBookmark = useUpdateBookmark();
+  const deleteBookmark = useDeleteBookmark();
+
   const { data: response, isLoading } = useBookmarks({
     search: search || undefined,
     categoryId: categoryFilter !== 'all' ? categoryFilter : undefined,
-    sortBy: sortBy === 'title' ? 'title' : sortBy === 'newest' ? 'createdAt' : sortBy === 'oldest' ? 'createdAt' : undefined,
+    sortBy:
+      sortBy === 'title'
+        ? 'title'
+        : sortBy === 'newest'
+        ? 'createdAt'
+        : sortBy === 'oldest'
+        ? 'createdAt'
+        : undefined,
     sortOrder: sortBy === 'oldest' ? 'asc' : 'desc',
     page,
     limit: 20,
   });
 
-  // Handle both paginated API response and flat array (mock)
   const bookmarks = response?.data ?? (Array.isArray(response) ? response : []);
   const meta = response?.meta;
   const totalPages = meta?.totalPages ?? 1;
   const totalItems = meta?.total ?? bookmarks.length;
+  const categoryList = Array.isArray(categories) ? categories : [];
 
   const handleEdit = (bookmark: any) => {
     setEditingBookmark(bookmark);
     setFormOpen(true);
   };
 
-  const handleFormSubmit = () => {
+  const handleDelete = async (bookmark: any) => {
+    if (!confirm(`Delete bookmark "${bookmark.title}"?`)) return;
+    await deleteBookmark.mutateAsync(bookmark.id);
+  };
+
+  const handlePin = async (bookmark: any) => {
+    await updateBookmark.mutateAsync({
+      id: bookmark.id,
+      isPinned: !bookmark.isPinned,
+    });
+  };
+
+  const handleFormSubmit = async (formData: {
+    url: string;
+    title: string;
+    description?: string;
+    categoryId?: string;
+    tags: string[];
+  }) => {
+    if (editingBookmark) {
+      await updateBookmark.mutateAsync({
+        id: editingBookmark.id,
+        url: formData.url,
+        title: formData.title,
+        description: formData.description,
+        categoryId: formData.categoryId || null,
+        tags: formData.tags,
+      });
+    } else {
+      await createBookmark.mutateAsync({
+        url: formData.url,
+        title: formData.title,
+        description: formData.description,
+        categoryId: formData.categoryId,
+        tags: formData.tags,
+      });
+    }
     setFormOpen(false);
     setEditingBookmark(null);
   };
@@ -63,10 +118,18 @@ export default function BookmarksPage() {
         title="Bookmarks"
         description="Manage and organize your team's bookmark collection."
       >
-        <Button onClick={() => setFormOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Bookmark
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/ai">
+            <Button variant="outline" className="gap-1.5">
+              <Sparkles className="h-4 w-4 text-accent" />
+              AI Organize
+            </Button>
+          </Link>
+          <Button onClick={() => setFormOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Bookmark
+          </Button>
+        </div>
       </PageHeader>
 
       {/* Filter Bar */}
@@ -74,16 +137,30 @@ export default function BookmarksPage() {
         <div className="flex flex-1 items-center gap-3">
           <SearchBar
             value={search}
-            onChange={(val) => { setSearch(val); setPage(1); }}
+            onChange={(val) => {
+              setSearch(val);
+              setPage(1);
+            }}
             className="flex-1 max-w-md"
           />
           <div className="hidden sm:flex items-center gap-2">
-            <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setPage(1); }}>
-              <SelectTrigger className="w-40">
+            <Select
+              value={categoryFilter}
+              onValueChange={(val) => {
+                setCategoryFilter(val);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-44">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
+                {categoryList.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -109,7 +186,7 @@ export default function BookmarksPage() {
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-all',
               view === 'grid'
                 ? 'bg-accent text-white shadow-sm'
-                : 'text-text-secondary hover:text-text-primary'
+                : 'text-text-secondary hover:text-text-primary',
             )}
           >
             <LayoutGrid className="h-4 w-4" />
@@ -121,7 +198,7 @@ export default function BookmarksPage() {
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-all',
               view === 'list'
                 ? 'bg-accent text-white shadow-sm'
-                : 'text-text-secondary hover:text-text-primary'
+                : 'text-text-secondary hover:text-text-primary',
             )}
           >
             <List className="h-4 w-4" />
@@ -132,13 +209,24 @@ export default function BookmarksPage() {
 
       {/* Mobile filters */}
       <div className="mb-4 flex items-center gap-2 sm:hidden overflow-x-auto scrollbar-none">
-        <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setPage(1); }}>
+        <Select
+          value={categoryFilter}
+          onValueChange={(val) => {
+            setCategoryFilter(val);
+            setPage(1);
+          }}
+        >
           <SelectTrigger className="w-auto min-w-[120px] h-8 text-xs">
             <SlidersHorizontal className="h-3 w-3 mr-1" />
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
+            {categoryList.map((cat) => (
+              <SelectItem key={cat.id} value={cat.id}>
+                {cat.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -164,11 +252,15 @@ export default function BookmarksPage() {
         <BookmarkGrid
           bookmarks={bookmarks}
           onEdit={handleEdit}
+          onDelete={handleDelete}
+          onPin={handlePin}
         />
       ) : (
         <BookmarkList
           bookmarks={bookmarks}
           onEdit={handleEdit}
+          onDelete={handleDelete}
+          onPin={handlePin}
           onSort={setSortBy}
           sortColumn={sortBy}
         />
@@ -218,14 +310,15 @@ export default function BookmarksPage() {
         open={formOpen}
         onOpenChange={handleFormClose}
         onSubmit={handleFormSubmit}
+        loading={createBookmark.isPending || updateBookmark.isPending}
         defaultValues={
           editingBookmark
             ? {
                 url: editingBookmark.url,
                 title: editingBookmark.title,
-                description: editingBookmark.description,
-                categoryId: editingBookmark.categoryId,
-                tags: editingBookmark.tags,
+                description: editingBookmark.description || '',
+                categoryId: editingBookmark.categoryId || '',
+                tags: editingBookmark.tags || [],
               }
             : undefined
         }

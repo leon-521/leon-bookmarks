@@ -254,4 +254,103 @@ export class ImportService {
 
     return result;
   }
+
+  async exportBookmarks(tenantId: string, format: 'html' | 'json' | 'csv' = 'html') {
+    const [categories, bookmarks] = await Promise.all([
+      this.prisma.category.findMany({
+        where: { tenantId },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.bookmark.findMany({
+        where: { tenantId, status: { not: 'ARCHIVED' } },
+        include: { category: { select: { id: true, name: true } } },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      }),
+    ]);
+
+    if (format === 'json') {
+      return {
+        format: 'json',
+        filename: `bookmarks-export-${new Date().toISOString().slice(0, 10)}.json`,
+        content: JSON.stringify(
+          bookmarks.map((b) => ({
+            title: b.title,
+            url: b.url,
+            description: b.description,
+            category: b.category?.name || null,
+            tags: b.tags,
+            isPinned: b.isPinned,
+            createdAt: b.createdAt,
+          })),
+          null,
+          2,
+        ),
+      };
+    }
+
+    if (format === 'csv') {
+      const escapeCsv = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
+      const header = 'Title,URL,Description,Category,Tags,CreatedAt';
+      const rows = bookmarks.map((b) =>
+        [
+          escapeCsv(b.title),
+          escapeCsv(b.url),
+          escapeCsv(b.description || ''),
+          escapeCsv(b.category?.name || ''),
+          escapeCsv(b.tags.join(';')),
+          escapeCsv(b.createdAt.toISOString()),
+        ].join(','),
+      );
+      return {
+        format: 'csv',
+        filename: `bookmarks-export-${new Date().toISOString().slice(0, 10)}.csv`,
+        content: [header, ...rows].join('\n'),
+      };
+    }
+
+    // Netscape Bookmark HTML format (Chrome / Firefox / Edge compatible)
+    const escHtml = (s: string) =>
+      (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const byCat = new Map<string | null, typeof bookmarks>();
+    for (const bm of bookmarks) {
+      const key = bm.categoryId || null;
+      if (!byCat.has(key)) byCat.set(key, []);
+      byCat.get(key)!.push(bm);
+    }
+
+    const lines: string[] = [
+      '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
+      '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+      '<TITLE>Leon Bookmarks Export</TITLE>',
+      '<H1>Bookmarks</H1>',
+      '<DL><p>',
+    ];
+
+    for (const cat of categories) {
+      const catItems = byCat.get(cat.id) || [];
+      if (catItems.length === 0) continue;
+      lines.push(`    <DT><H3>${escHtml(cat.name)}</H3>`);
+      lines.push('    <DL><p>');
+      for (const bm of catItems) {
+        const ts = Math.floor(bm.createdAt.getTime() / 1000);
+        lines.push(`        <DT><A HREF="${escHtml(bm.url)}" ADD_DATE="${ts}">${escHtml(bm.title)}</A>`);
+      }
+      lines.push('    </DL><p>');
+    }
+
+    const uncategorized = byCat.get(null) || [];
+    for (const bm of uncategorized) {
+      const ts = Math.floor(bm.createdAt.getTime() / 1000);
+      lines.push(`    <DT><A HREF="${escHtml(bm.url)}" ADD_DATE="${ts}">${escHtml(bm.title)}</A>`);
+    }
+
+    lines.push('</DL><p>');
+
+    return {
+      format: 'html',
+      filename: `bookmarks-export-${new Date().toISOString().slice(0, 10)}.html`,
+      content: lines.join('\n'),
+    };
+  }
 }

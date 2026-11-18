@@ -1,10 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, Bookmark, Users, Palette, ArrowRight, Zap, Shield, Globe } from 'lucide-react';
+import { Sparkles, Bookmark, Users, Palette, ArrowRight, Zap, Shield, Globe, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/theme-provider';
-import { Sun, Moon } from 'lucide-react';
 
 const features = [
   {
