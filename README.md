@@ -229,6 +229,31 @@ docker compose exec api npx prisma db seed
 
 ---
 
+### 方式三：1Panel 面板部署 / Option 3: 1Panel Deployment
+
+> **适用于使用 [1Panel](https://1panel.cn/) 面板管理服务器的用户** / **For users managing servers with 1Panel**
+
+通过 1Panel 的「容器编排」功能可视化部署，支持：
+
+- ✅ 在 1Panel 面板中创建 Docker Compose 编排
+- ✅ 一键构建和启动所有服务
+- ✅ 通过 1Panel 网站管理配置域名 + HTTPS + 反向代理
+- ✅ 复用 1Panel 已安装的 PostgreSQL / Redis
+- ✅ 在 1Panel 中查看容器日志和状态
+
+📖 **详细教程请查看：[1Panel 部署指南](docs/1panel-deploy.md)**
+
+快速预览步骤：
+
+1. **创建编排** — 1Panel → 容器 → 编排 → 创建编排（名称：`leon-bookmarks`）
+2. **粘贴配置** — 将 [1Panel 部署指南](docs/1panel-deploy.md) 中的 Docker Compose 配置粘贴进去
+3. **修改密码** — 修改 PostgreSQL、JWT、Meilisearch、MinIO 的密码
+4. **确认创建** — 等待构建完成（约 5-10 分钟）
+5. **初始化 DB** — 在 `lb-api` 容器终端执行 `npx prisma migrate deploy`
+6. **配置域名** — （可选）通过 1Panel 网站管理创建反向代理 + HTTPS
+
+---
+
 ### 🧑‍💻 演示账号 / Demo Accounts
 
 种子数据创建后可用 / Available after seeding:
