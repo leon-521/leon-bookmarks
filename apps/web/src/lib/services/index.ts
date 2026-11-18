@@ -11,3 +11,6 @@ export type { Tenant, UpdateTenantData, UpdateThemeData } from './tenant.service
 export type { PortalData } from './portal.service';
 export { importService } from './import.service';
 export type { ImportResult, ImportHtmlOptions } from './import.service';
+export { adminService } from './admin.service';
+export { billingService } from './billing.service';
+export type { PricingPlan, SubscriptionInfo } from './billing.service';

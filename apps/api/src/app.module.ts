@@ -9,6 +9,8 @@ import { CategoryModule } from './modules/category/category.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { ImportModule } from './modules/import/import.module';
 import { MetaScraperModule } from './modules/meta-scraper/meta-scraper.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -27,6 +29,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     PortalModule,
     ImportModule,
     MetaScraperModule,
+    AdminModule,
+    BillingModule,
   ],
   providers: [
     {
