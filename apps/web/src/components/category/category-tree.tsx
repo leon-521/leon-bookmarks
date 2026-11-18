@@ -20,7 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { Category } from '@/lib/mock-data';
+type Category = Record<string, any>;
 
 const iconMap: Record<string, React.ElementType> = {
   code: Code,

@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { mockTenant } from '@/lib/mock-data';
+import { useAuth } from '@/hooks/use-auth';
 
 const tabs = [
   { id: 'general', label: 'General', icon: Globe },
@@ -31,14 +31,15 @@ const layoutOptions = [
 ];
 
 export default function SettingsPage() {
+  const { tenant } = useAuth();
   const [activeTab, setActiveTab] = React.useState<TabId>('general');
   const [settings, setSettings] = React.useState({
-    name: mockTenant.name,
-    slug: mockTenant.slug,
-    accentColor: mockTenant.themeConfig.accentColor,
-    layout: mockTenant.themeConfig.layout,
-    borderRadius: mockTenant.themeConfig.borderRadius,
-    cardSpacing: mockTenant.themeConfig.cardSpacing,
+    name: tenant?.name || '',
+    slug: tenant?.slug || '',
+    accentColor: '#3b82f6',
+    layout: 'grid',
+    borderRadius: 12,
+    cardSpacing: 16,
     customDomain: '',
   });
 

@@ -4,7 +4,8 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Globe, X } from 'lucide-react';
+import { Globe, X, Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { mockCategories } from '@/lib/mock-data';
+import { api } from '@/lib/api';
 
 const bookmarkSchema = z.object({
   url: z.string().url('Please enter a valid URL'),
@@ -51,6 +52,8 @@ export function BookmarkForm({
 }: BookmarkFormProps) {
   const [tags, setTags] = React.useState<string[]>(defaultValues?.tags || []);
   const [tagInput, setTagInput] = React.useState('');
+  const [isFetchingMeta, setIsFetchingMeta] = React.useState(false);
+  const [faviconUrl, setFaviconUrl] = React.useState<string | null>(null);
 
   const {
     register,
@@ -70,6 +73,33 @@ export function BookmarkForm({
   });
 
   const url = watch('url');
+  const title = watch('title');
+
+  const fetchMeta = async (targetUrl: string) => {
+    if (!targetUrl || title) return;
+    try {
+      new URL(targetUrl);
+    } catch {
+      return;
+    }
+    setIsFetchingMeta(true);
+    try {
+      const meta = await api.post<{ title?: string; description?: string; favicon?: string }>('/meta/scrape', { url: targetUrl });
+      if (meta.title && !watch('title')) {
+        setValue('title', meta.title);
+      }
+      if (meta.description && !watch('description')) {
+        setValue('description', meta.description);
+      }
+      if (meta.favicon) {
+        setFaviconUrl(meta.favicon);
+      }
+    } catch {
+      // Silently ignore meta fetch errors
+    } finally {
+      setIsFetchingMeta(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!open) {
@@ -98,9 +128,16 @@ export function BookmarkForm({
     onSubmit({ ...data, tags });
   };
 
+  const [apiCategories, setApiCategories] = React.useState<any[]>([]);
+  React.useEffect(() => {
+    api.get<any>('/categories/tree').then((res) => {
+      setApiCategories(res.data || res || []);
+    }).catch(() => {});
+  }, []);
+
   const flatCategories = React.useMemo(() => {
     const flat: { id: string; name: string; depth: number }[] = [];
-    const addCategory = (cats: typeof mockCategories, depth: number) => {
+    const addCategory = (cats: any[], depth: number) => {
       for (const cat of cats) {
         flat.push({ id: cat.id, name: cat.name, depth });
         if (cat.children) {
@@ -108,9 +145,9 @@ export function BookmarkForm({
         }
       }
     };
-    addCategory(mockCategories, 0);
+    addCategory(apiCategories, 0);
     return flat;
-  }, []);
+  }, [apiCategories]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,17 +164,28 @@ export function BookmarkForm({
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
           {/* URL */}
           <div className="space-y-1.5">
-            <Input
-              label="URL"
-              placeholder="https://example.com"
-              iconLeft={<Globe className="h-4 w-4" />}
-              error={errors.url?.message}
-              {...register('url')}
-            />
+            <div className="relative">
+              <Input
+                label="URL"
+                placeholder="https://example.com"
+                iconLeft={<Globe className="h-4 w-4" />}
+                error={errors.url?.message}
+                {...register('url', {
+                  onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+                    fetchMeta(e.target.value);
+                  },
+                })}
+              />
+              {isFetchingMeta && (
+                <div className="absolute right-3 top-[34px]">
+                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                </div>
+              )}
+            </div>
             {url && !errors.url && (
               <div className="flex items-center gap-2 px-1">
                 <img
-                  src={`https://www.google.com/s2/favicons?domain=${url}&sz=16`}
+                  src={faviconUrl || `https://www.google.com/s2/favicons?domain=${url}&sz=16`}
                   alt=""
                   className="h-4 w-4 rounded-sm"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

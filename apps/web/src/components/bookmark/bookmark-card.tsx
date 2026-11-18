@@ -19,7 +19,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { Bookmark } from '@/lib/mock-data';
+
+interface Bookmark {
+  id: string;
+  title: string;
+  url: string;
+  description?: string | null;
+  favicon?: string;
+  faviconUrl?: string | null;
+  categoryId?: string | null;
+  categoryName?: string;
+  category?: { id: string; name: string } | null;
+  tags: string[];
+  isPinned: boolean;
+  status?: string;
+  clickCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -45,9 +62,9 @@ export function BookmarkCard({
       <div className="group flex items-center gap-4 rounded-lg border border-border bg-bg-primary px-4 py-3 transition-all duration-200 hover:border-border-hover hover:shadow-sm">
         {/* Favicon */}
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-bg-secondary">
-          {bookmark.favicon ? (
+          {bookmark.faviconUrl || bookmark.favicon ? (
             <img
-              src={bookmark.favicon}
+              src={bookmark.faviconUrl || bookmark.favicon}
               alt=""
               className="h-5 w-5 rounded-sm object-contain"
               onError={(e) => {
@@ -56,7 +73,7 @@ export function BookmarkCard({
               }}
             />
           ) : null}
-          <Globe className={cn('h-4 w-4 text-text-tertiary', bookmark.favicon && 'hidden')} />
+          <Globe className={cn('h-4 w-4 text-text-tertiary', bookmark.faviconUrl || bookmark.favicon && 'hidden')} />
         </div>
 
         {/* Title & URL */}
@@ -147,9 +164,9 @@ export function BookmarkCard({
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-secondary shadow-xs">
-              {bookmark.favicon ? (
+              {bookmark.faviconUrl || bookmark.favicon ? (
                 <img
-                  src={bookmark.favicon}
+                  src={bookmark.faviconUrl || bookmark.favicon}
                   alt=""
                   className="h-6 w-6 rounded-sm object-contain"
                   onError={(e) => {
@@ -158,7 +175,7 @@ export function BookmarkCard({
                   }}
                 />
               ) : null}
-              <Globe className={cn('h-5 w-5 text-text-tertiary', bookmark.favicon && 'hidden')} />
+              <Globe className={cn('h-5 w-5 text-text-tertiary', bookmark.faviconUrl || bookmark.favicon && 'hidden')} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">

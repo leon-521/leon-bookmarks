@@ -9,3 +9,5 @@ export type { Bookmark, BookmarkFilters, PaginatedResponse, CreateBookmarkData, 
 export type { Category, CreateCategoryData, UpdateCategoryData } from './category.service';
 export type { Tenant, UpdateTenantData, UpdateThemeData } from './tenant.service';
 export type { PortalData } from './portal.service';
+export { importService } from './import.service';
+export type { ImportResult, ImportHtmlOptions } from './import.service';

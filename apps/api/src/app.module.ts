@@ -7,6 +7,8 @@ import { TenantModule } from './modules/tenant/tenant.module';
 import { BookmarkModule } from './modules/bookmark/bookmark.module';
 import { CategoryModule } from './modules/category/category.module';
 import { PortalModule } from './modules/portal/portal.module';
+import { ImportModule } from './modules/import/import.module';
+import { MetaScraperModule } from './modules/meta-scraper/meta-scraper.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -23,6 +25,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     BookmarkModule,
     CategoryModule,
     PortalModule,
+    ImportModule,
+    MetaScraperModule,
   ],
   providers: [
     {
