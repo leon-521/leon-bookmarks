@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Categories', href: '/categories', icon: FolderTree },
   { label: 'Members', href: '/members', icon: Users },
   { label: 'Import', href: '/import', icon: Import },
+  { href: '/ai', label: 'AI Assistant', icon: Sparkles },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 

@@ -14,3 +14,5 @@ export type { ImportResult, ImportHtmlOptions } from './import.service';
 export { adminService } from './admin.service';
 export { billingService } from './billing.service';
 export type { PricingPlan, SubscriptionInfo } from './billing.service';
+export { aiService } from './ai.service';
+export type { AiCategorySuggestion, AiTagSuggestion, AiSummary, AiOrganizeResult, SimilarBookmark, DuplicateGroup } from './ai.service';

@@ -10,6 +10,7 @@ import { PortalModule } from './modules/portal/portal.module';
 import { ImportModule } from './modules/import/import.module';
 import { MetaScraperModule } from './modules/meta-scraper/meta-scraper.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AiModule } from './modules/ai/ai.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -31,6 +32,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     MetaScraperModule,
     AdminModule,
     BillingModule,
+    AiModule,
   ],
   providers: [
     {
