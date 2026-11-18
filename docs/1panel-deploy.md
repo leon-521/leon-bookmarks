@@ -157,7 +157,7 @@ services:
   # MinIO - S3 兼容对象存储
   # ═══════════════════════════════════════════
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: pgsty/minio:latest
     container_name: lb-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
