@@ -1,0 +1,142 @@
+# ═══════════════════════════════════════════════════════════
+# Leon Bookmarks - 1Panel 专用容器编排文件 (Docker Compose)
+# 直接全选复制本文件内容粘贴到 1Panel「容器 → 编排」即可一键部署
+# ═══════════════════════════════════════════════════════════
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: leon_bookmarks
+      POSTGRES_USER: postgres
+      # ⚠️ 生产环境请修改数据库密码（需与下方 api 的 DATABASE_URL 保持一致）
+      POSTGRES_PASSWORD: LeonBm2024!Secure
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lb-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: lb-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "16379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lb-network
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: lb-meilisearch
+    restart: unless-stopped
+    environment:
+      # ⚠️ 生产环境请修改 Master Key（需与下方 api 的 MEILI_MASTER_KEY 保持一致）
+      MEILI_MASTER_KEY: LeonMeili2024!Key
+      MEILI_ENV: production
+    ports:
+      - "17700:7700"
+    volumes:
+      - meilidata:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - lb-network
+
+  minio:
+    image: pgsty/minio:latest
+    container_name: lb-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      # ⚠️ 生产环境请修改用户名和密码（需与下方 api 的 MINIO_ACCESS_KEY/SECRET_KEY 保持一致）
+      MINIO_ROOT_USER: leonminio
+      MINIO_ROOT_PASSWORD: LeonMinio2024!Pass
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - miniodata:/data
+    networks:
+      - lb-network
+
+  api:
+    build:
+      context: https://github.com/leon-521/leon-bookmarks.git#feat/bookmark-nav-v1
+      dockerfile: apps/api/Dockerfile
+    container_name: lb-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:LeonBm2024!Secure@postgres:5432/leon_bookmarks
+      # ⚠️ 生产环境请修改 JWT 密钥（至少 32 位随机字符串）
+      JWT_SECRET: LeonJwt2024SecretKeyChangeMe!1234
+      JWT_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 7d
+      REDIS_URL: redis://redis:6379
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: LeonMeili2024!Key
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: leonminio
+      MINIO_SECRET_KEY: LeonMinio2024!Pass
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    networks:
+      - lb-network
+
+  web:
+    build:
+      context: https://github.com/leon-521/leon-bookmarks.git#feat/bookmark-nav-v1
+      dockerfile: apps/web/Dockerfile
+    container_name: lb-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+      PORT: 3000
+      API_INTERNAL_URL: http://api:4000
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - lb-network
+
+volumes:
+  pgdata:
+  redisdata:
+  meilidata:
+  miniodata:
+
+networks:
+  lb-network:
+    driver: bridge
