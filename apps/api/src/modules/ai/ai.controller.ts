@@ -1,7 +1,10 @@
 import { Controller, Post, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('ai')
@@ -43,16 +46,18 @@ export class AiController {
     @Param('bookmarkId') bookmarkId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.aiService.findSimilar(tenantId, bookmarkId, limit ? parseInt(limit) : 5);
+    return this.aiService.findSimilar(tenantId, bookmarkId, limit ? parseInt(limit, 10) || 5 : 5);
   }
 
   @Post('organize')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @ApiOperation({ summary: 'Batch auto-organize uncategorized bookmarks' })
   async organize(
     @CurrentUser('tenantId') tenantId: string,
     @Body() body: { autoApply?: boolean },
   ) {
-    return this.aiService.batchOrganize(tenantId, body.autoApply ?? false);
+    return this.aiService.batchOrganize(tenantId, body?.autoApply ?? false);
   }
 
   @Get('duplicates')
@@ -67,7 +72,7 @@ export class AiController {
     @CurrentUser('tenantId') tenantId: string,
     @Body() body: { question: string },
   ) {
-    return this.aiService.askWorkspace(tenantId, body.question || '');
+    return this.aiService.askWorkspace(tenantId, body?.question || '');
   }
 
   @Post('taxonomy/suggest')
@@ -77,20 +82,25 @@ export class AiController {
   }
 
   @Post('taxonomy/apply')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @ApiOperation({ summary: 'Apply AI suggested taxonomy categories and assignments' })
   async applyTaxonomy(
     @CurrentUser('tenantId') tenantId: string,
     @Body() body: { proposals: { name: string; icon?: string; bookmarkIds?: string[] }[] },
   ) {
-    return this.aiService.applyTaxonomy(tenantId, body.proposals || []);
+    return this.aiService.applyTaxonomy(tenantId, body?.proposals || []);
   }
 
   @Post('health-check')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @ApiOperation({ summary: 'Batch check bookmark URL health and get AI broken-link suggestions' })
   async healthCheck(
     @CurrentUser('tenantId') tenantId: string,
     @Body() body: { limit?: number },
   ) {
-    return this.aiService.checkLinksHealth(tenantId, body?.limit ?? 25);
+    const safeLimit = Math.min(50, Math.max(1, body?.limit ?? 25));
+    return this.aiService.checkLinksHealth(tenantId, safeLimit);
   }
 }

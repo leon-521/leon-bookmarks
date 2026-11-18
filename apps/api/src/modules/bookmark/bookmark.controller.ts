@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ArrayNotEmpty, IsArray, IsOptional, IsString } from 'class-validator';
 import { Role } from '@prisma/client';
 import { BookmarkService } from './bookmark.service';
 import { CreateBookmarkDto } from './dto/create-bookmark.dto';
@@ -19,6 +20,24 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+class BatchDeleteBookmarksDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  ids: string[];
+}
+
+class BatchMoveBookmarksDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  ids: string[];
+
+  @IsString()
+  @IsOptional()
+  categoryId?: string | null;
+}
 
 @ApiTags('bookmarks')
 @ApiBearerAuth()
@@ -82,13 +101,13 @@ export class BookmarkController {
 
   @Post('batch/delete')
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @ApiOperation({ summary: 'Batch delete bookmarks' })
   async batchDelete(
     @CurrentUser('tenantId') tenantId: string,
-    @Body('ids') ids: string[],
+    @Body() dto: BatchDeleteBookmarksDto,
   ) {
-    return this.bookmarkService.batchDelete(tenantId, ids);
+    return this.bookmarkService.batchDelete(tenantId, dto.ids);
   }
 
   @Post('batch/move')
@@ -97,10 +116,9 @@ export class BookmarkController {
   @ApiOperation({ summary: 'Batch move bookmarks to a category' })
   async batchMove(
     @CurrentUser('tenantId') tenantId: string,
-    @Body('ids') ids: string[],
-    @Body('categoryId') categoryId: string | null,
+    @Body() dto: BatchMoveBookmarksDto,
   ) {
-    return this.bookmarkService.batchMove(tenantId, ids, categoryId);
+    return this.bookmarkService.batchMove(tenantId, dto.ids, dto.categoryId ?? null);
   }
 
   @Post(':id/click')

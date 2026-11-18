@@ -9,6 +9,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { Role } from '@prisma/client';
 import { ImportService } from './import.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -16,14 +17,27 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
-class ImportHtmlDto {
+export class ImportHtmlDto {
+  @IsString()
+  @IsNotEmpty()
   content: string;
+
+  @IsBoolean()
+  @IsOptional()
   createCategories?: boolean;
+
+  @IsString()
+  @IsOptional()
   defaultCategoryId?: string;
+
+  @IsBoolean()
+  @IsOptional()
   skipDuplicates?: boolean;
 }
 
-class ImportJsonDto {
+export class ImportJsonDto {
+  @IsString()
+  @IsNotEmpty()
   content: string;
 }
 

@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
@@ -12,7 +12,6 @@ import { MetaScraperModule } from './modules/meta-scraper/meta-scraper.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AiModule } from './modules/ai/ai.module';
 import { BillingModule } from './modules/billing/billing.module';
-import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -45,8 +44,4 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

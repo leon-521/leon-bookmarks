@@ -1,6 +1,6 @@
-import { IsOptional, IsString, IsInt, IsEnum, IsBoolean, Min } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsEnum, IsBoolean, IsIn, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { BookmarkStatus } from '@prisma/client';
 
 export class BookmarkFilterDto {
@@ -27,7 +27,13 @@ export class BookmarkFilterDto {
   @ApiPropertyOptional({ example: true })
   @IsBoolean()
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : undefined,
+  )
   isPinned?: boolean;
 
   @ApiPropertyOptional({ example: 1, default: 1 })
@@ -40,17 +46,18 @@ export class BookmarkFilterDto {
   @ApiPropertyOptional({ example: 20, default: 20 })
   @IsInt()
   @Min(1)
+  @Max(100)
   @IsOptional()
   @Type(() => Number)
   limit?: number = 20;
 
   @ApiPropertyOptional({ example: 'createdAt', default: 'createdAt' })
-  @IsString()
+  @IsIn(['createdAt', 'updatedAt', 'title', 'clickCount', 'sortOrder'])
   @IsOptional()
   sortBy?: string = 'createdAt';
 
   @ApiPropertyOptional({ example: 'desc', default: 'desc' })
-  @IsString()
+  @IsIn(['asc', 'desc'])
   @IsOptional()
   sortOrder?: 'asc' | 'desc' = 'desc';
 }

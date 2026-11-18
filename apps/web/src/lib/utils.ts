@@ -14,11 +14,6 @@ export function getDomainFromUrl(url: string): string {
   }
 }
 
-export function truncate(str: string, length: number): string {
-  if (str.length <= length) return str;
-  return str.slice(0, length) + '...';
-}
-
 export function getInitials(name: string): string {
   return name
     .split(' ')
@@ -26,15 +21,4 @@ export function getInitials(name: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 2);
-}
-
-export function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timeoutId: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delay);
-  };
 }

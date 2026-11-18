@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -18,7 +18,6 @@ export class CategoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(tenantId: string, dto: CreateCategoryDto) {
-    // If parentId is specified, verify it exists and belongs to the same tenant
     if (dto.parentId) {
       const parent = await this.prisma.category.findFirst({
         where: { id: dto.parentId, tenantId },
@@ -33,7 +32,7 @@ export class CategoryService {
       data: {
         tenantId,
         name: dto.name,
-        parentId: dto.parentId,
+        parentId: dto.parentId || null,
         icon: dto.icon,
         sortOrder: dto.sortOrder ?? 0,
       },
@@ -83,7 +82,7 @@ export class CategoryService {
       },
     });
 
-    return this.buildTree(categories);
+    return CategoryService.buildTree(categories);
   }
 
   async update(tenantId: string, id: string, dto: UpdateCategoryDto) {
@@ -95,14 +94,27 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    // If updating parentId, verify new parent exists and belongs to same tenant
     if (dto.parentId) {
-      const parent = await this.prisma.category.findFirst({
-        where: { id: dto.parentId, tenantId },
-      });
+      if (dto.parentId === id) {
+        throw new BadRequestException('A category cannot be its own parent');
+      }
 
-      if (!parent) {
+      const allTenantCategories = await this.prisma.category.findMany({
+        where: { tenantId },
+        select: { id: true, parentId: true },
+      });
+      const parentById = new Map(allTenantCategories.map((c) => [c.id, c.parentId]));
+
+      if (!parentById.has(dto.parentId)) {
         throw new NotFoundException('Parent category not found');
+      }
+
+      let cursor: string | null | undefined = dto.parentId;
+      while (cursor) {
+        if (cursor === id) {
+          throw new BadRequestException('Cannot move a category inside one of its own subcategories');
+        }
+        cursor = parentById.get(cursor);
       }
     }
 
@@ -124,25 +136,26 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
-    // Move children up to parent (or make them root categories)
-    await this.prisma.category.updateMany({
-      where: { parentId: id, tenantId },
-      data: { parentId: category.parentId },
-    });
-
-    // Unlink bookmarks from the deleted category
-    await this.prisma.bookmark.updateMany({
-      where: { categoryId: id, tenantId },
-      data: { categoryId: null },
-    });
-
-    await this.prisma.category.delete({ where: { id } });
+    await this.prisma.$transaction([
+      this.prisma.category.updateMany({
+        where: { parentId: id, tenantId },
+        data: { parentId: category.parentId },
+      }),
+      this.prisma.bookmark.updateMany({
+        where: { categoryId: id, tenantId },
+        data: { categoryId: null },
+      }),
+      this.prisma.category.delete({ where: { id } }),
+    ]);
 
     return { deleted: true };
   }
 
   async reorder(tenantId: string, orderedIds: string[]) {
-    // Update sortOrder for each category based on its position in the array
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      throw new BadRequestException('No category IDs provided');
+    }
+
     const updates = orderedIds.map((id, index) =>
       this.prisma.category.updateMany({
         where: { id, tenantId },
@@ -158,7 +171,7 @@ export class CategoryService {
   /**
    * Builds a tree structure from a flat list of categories.
    */
-  private buildTree(
+  static buildTree(
     categories: Array<{
       id: string;
       name: string;
@@ -171,7 +184,6 @@ export class CategoryService {
     const map = new Map<string, CategoryTreeNode>();
     const roots: CategoryTreeNode[] = [];
 
-    // Create all nodes
     for (const cat of categories) {
       map.set(cat.id, {
         id: cat.id,
@@ -184,7 +196,6 @@ export class CategoryService {
       });
     }
 
-    // Build parent-child relationships
     for (const cat of categories) {
       const node = map.get(cat.id)!;
 

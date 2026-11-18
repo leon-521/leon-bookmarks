@@ -28,15 +28,21 @@ function getSystemTheme(): 'light' | 'dark' {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<Theme>('light');
   const [resolvedTheme, setResolvedTheme] = React.useState<'light' | 'dark'>('light');
+  const initializedRef = React.useRef(false);
 
   React.useEffect(() => {
     const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored) {
-      setThemeState(stored);
-    }
+    const initial: Theme =
+      stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
+    initializedRef.current = true;
+    setThemeState(initial);
+    const resolved = initial === 'system' ? getSystemTheme() : initial;
+    setResolvedTheme(resolved);
+    document.documentElement.setAttribute('data-theme', resolved);
   }, []);
 
   React.useEffect(() => {
+    if (!initializedRef.current) return;
     const resolved = theme === 'system' ? getSystemTheme() : theme;
     setResolvedTheme(resolved);
     document.documentElement.setAttribute('data-theme', resolved);
@@ -55,6 +61,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   const setTheme = React.useCallback((newTheme: Theme) => {
+    initializedRef.current = true;
     setThemeState(newTheme);
   }, []);
 

@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -20,35 +21,35 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    // Check if tenant slug already exists
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const normalizedSlug = dto.tenantSlug.toLowerCase().trim();
+
     const existingTenant = await this.prisma.tenant.findUnique({
-      where: { slug: dto.tenantSlug },
+      where: { slug: normalizedSlug },
     });
 
     if (existingTenant) {
       throw new ConflictException('Tenant slug already taken');
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
-    // Create tenant and user in a transaction
     const result = await this.prisma.$transaction(async (tx) => {
       const existingUserCount = await tx.user.count();
       const initialRole = existingUserCount === 0 ? Role.SUPER_ADMIN : Role.ADMIN;
 
       const tenant = await tx.tenant.create({
         data: {
-          name: dto.tenantName,
-          slug: dto.tenantSlug,
+          name: dto.tenantName.trim(),
+          slug: normalizedSlug,
         },
       });
 
       const user = await tx.user.create({
         data: {
           tenantId: tenant.id,
-          email: dto.email,
-          name: dto.name,
+          email: normalizedEmail,
+          name: dto.name.trim(),
           password: hashedPassword,
           role: initialRole,
         },
@@ -57,7 +58,6 @@ export class AuthService {
       return { tenant, user };
     });
 
-    // Generate tokens
     const tokens = await this.generateTokens(
       result.user.id,
       result.user.tenantId,
@@ -76,36 +76,39 @@ export class AuthService {
         id: result.tenant.id,
         name: result.tenant.name,
         slug: result.tenant.slug,
+        plan: result.tenant.plan,
       },
       ...tokens,
     };
   }
 
   async login(dto: LoginDto) {
-    // Find user by email (across all tenants for login)
+    const normalizedEmail = dto.email.toLowerCase().trim();
+
     const user = await this.prisma.user.findFirst({
-      where: { email: dto.email },
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
       include: { tenant: true },
+      orderBy: { createdAt: 'asc' },
     });
 
     if (!user || !user.password) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Verify password
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
-
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Update last login
+    if (!user.tenant.isActive && user.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('This workspace has been suspended');
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
 
-    // Generate tokens
     const tokens = await this.generateTokens(
       user.id,
       user.tenantId,
@@ -124,6 +127,7 @@ export class AuthService {
         id: user.tenant.id,
         name: user.tenant.name,
         slug: user.tenant.slug,
+        plan: user.tenant.plan,
       },
       ...tokens,
     };
@@ -131,16 +135,29 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     try {
+      const refreshSecret =
+        this.configService.get<string>('JWT_REFRESH_SECRET') ||
+        this.configService.get<string>('JWT_SECRET', 'default-secret');
+
       const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('JWT_SECRET', 'default-secret'),
+        secret: refreshSecret,
       });
+
+      if (payload.tokenType && payload.tokenType !== 'refresh') {
+        throw new UnauthorizedException('Invalid token type');
+      }
 
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
+        include: { tenant: { select: { isActive: true } } },
       });
 
       if (!user) {
         throw new UnauthorizedException('User not found');
+      }
+
+      if (!user.tenant.isActive && user.role !== Role.SUPER_ADMIN) {
+        throw new ForbiddenException('This workspace has been suspended');
       }
 
       return this.generateTokens(
@@ -149,7 +166,8 @@ export class AuthService {
         user.email,
         user.role,
       );
-    } catch {
+    } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -170,6 +188,9 @@ export class AuthService {
             name: true,
             slug: true,
             plan: true,
+            logo: true,
+            customDomain: true,
+            themeConfig: true,
           },
         },
       },
@@ -188,18 +209,28 @@ export class AuthService {
     email: string,
     role: string,
   ) {
-    const payload = { sub: userId, tenantId, email, role };
+    const basePayload = { sub: userId, tenantId, email, role };
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ||
+      this.configService.get<string>('JWT_SECRET', 'default-secret');
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        expiresIn: this.configService.get<string>('JWT_EXPIRATION', '15m'),
-      }),
-      this.jwtService.signAsync(payload, {
-        expiresIn: this.configService.get<string>(
-          'JWT_REFRESH_EXPIRATION',
-          '7d',
-        ),
-      }),
+      this.jwtService.signAsync(
+        { ...basePayload, tokenType: 'access' },
+        {
+          expiresIn: this.configService.get<string>('JWT_EXPIRATION', '15m'),
+        },
+      ),
+      this.jwtService.signAsync(
+        { ...basePayload, tokenType: 'refresh' },
+        {
+          secret: refreshSecret,
+          expiresIn: this.configService.get<string>(
+            'JWT_REFRESH_EXPIRATION',
+            '7d',
+          ),
+        },
+      ),
     ]);
 
     return { accessToken, refreshToken };

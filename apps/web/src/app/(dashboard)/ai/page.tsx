@@ -888,8 +888,7 @@ export default function AiPage() {
           <div>
             <p className="font-medium text-text-primary mb-1">双模式 AI 架构说明</p>
             <p>
-              配置 <code className="rounded bg-bg-secondary px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code> 与{' '}
-              <code className="rounded bg-bg-secondary px-1.5 py-0.5 text-xs">OPENAI_BASE_URL</code>（兼容 OpenAI、DeepSeek、通义千问及本地 Ollama）后，系统自动启用大模型深度推理；未配置密钥时无缝降级至内置域名词典与 TF 关键词相似度启发式引擎，开箱即用零外部依赖。
+              超级管理员在后台 <code className="rounded bg-bg-secondary px-1.5 py-0.5 text-xs">Super Admin → AI Providers</code> 配置默认 AI 供应商（兼容 OpenAI、DeepSeek、Moonshot、智谱、硅基流动及本地 Ollama）后，系统自动启用大模型深度推理；未配置或禁用供应商时无缝降级至内置域名词典与 TF 关键词相似度启发式引擎，开箱即用零外部依赖。
             </p>
           </div>
         </div>

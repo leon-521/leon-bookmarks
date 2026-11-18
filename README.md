@@ -87,14 +87,12 @@ leon-bookmarks/
 │       │   ├── lib/            #   工具和服务 / Utils & services
 │       │   └── providers/      #   上下文提供者 / Context providers
 │       └── Dockerfile
-├── packages/
-│   ├── shared/                 # 共享类型和常量 / Shared types & constants
-│   └── ui/                     # 共享 UI 组件库 / Shared UI component library
 ├── browser-extension/          # Chrome/Edge 浏览器扩展 / Browser extension (MV3)
 ├── docker/                     # 基础设施 Docker Compose / Infrastructure compose
 │   ├── docker-compose.yml      #   仅基础设施服务 / Infrastructure services only
 │   └── init-db.sql             #   数据库初始化 / DB initialization
 ├── docker-compose.yml          # 🐳 全栈部署 / Full-stack deployment
+├── docker-compose.1panel.yml   # 🚀 1Panel 单文件编排 / 1Panel standalone compose
 ├── .env.docker.example         # Docker 环境变量模板 / Docker env template
 ├── turbo.json                  # Turborepo 配置 / Turborepo config
 ├── pnpm-workspace.yaml         # pnpm 工作区 / pnpm workspace

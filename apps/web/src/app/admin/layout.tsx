@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Shield, Building2, Users, BarChart3, ChevronLeft, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: BarChart3 },
@@ -15,6 +16,29 @@ const adminNavItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAuthenticated, isHydrated, hydrate } = useAuth();
+
+  React.useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  React.useEffect(() => {
+    if (!isHydrated) return;
+    if (!isAuthenticated) {
+      router.replace('/login');
+    } else if (user?.role !== 'SUPER_ADMIN') {
+      router.replace('/dashboard');
+    }
+  }, [isHydrated, isAuthenticated, user?.role, router]);
+
+  if (!isHydrated || !isAuthenticated || user?.role !== 'SUPER_ADMIN') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-secondary text-sm text-text-tertiary">
+        Verifying permissions…
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg-secondary">

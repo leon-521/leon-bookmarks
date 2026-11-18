@@ -7,8 +7,10 @@ import {
   Param,
   Body,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 import { Role } from '@prisma/client';
 import { TenantService } from './tenant.service';
 import { UpdateTenantDto, UpdateThemeDto } from './dto/update-tenant.dto';
@@ -16,6 +18,28 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+class InviteWorkspaceMemberDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  role?: Role;
+
+  @IsString()
+  @MinLength(6)
+  @IsOptional()
+  password?: string;
+}
+
+class UpdateWorkspaceMemberRoleDto {
+  @IsString()
+  role: Role;
+}
 
 @ApiTags('tenants')
 @Controller('tenants')
@@ -37,7 +61,7 @@ export class TenantController {
   @ApiOperation({ summary: 'Invite a new member to the current workspace' })
   async inviteMember(
     @CurrentUser('tenantId') tenantId: string,
-    @Body() body: { email: string; name: string; role?: Role; password?: string },
+    @Body() body: InviteWorkspaceMemberDto,
   ) {
     return this.tenantService.inviteMember(tenantId, body);
   }
@@ -50,10 +74,11 @@ export class TenantController {
   async updateMemberRole(
     @CurrentUser('tenantId') tenantId: string,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') requesterRole: Role,
     @Param('memberId') memberId: string,
-    @Body('role') role: Role,
+    @Body() body: UpdateWorkspaceMemberRoleDto,
   ) {
-    return this.tenantService.updateMemberRole(tenantId, userId, memberId, role);
+    return this.tenantService.updateMemberRole(tenantId, userId, requesterRole, memberId, body.role);
   }
 
   @Delete('members/:memberId')
@@ -64,9 +89,10 @@ export class TenantController {
   async removeMember(
     @CurrentUser('tenantId') tenantId: string,
     @CurrentUser('userId') userId: string,
+    @CurrentUser('role') requesterRole: Role,
     @Param('memberId') memberId: string,
   ) {
-    return this.tenantService.removeMember(tenantId, userId, memberId);
+    return this.tenantService.removeMember(tenantId, userId, requesterRole, memberId);
   }
 
   @Get('slug/:slug')
@@ -79,7 +105,14 @@ export class TenantController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get tenant by ID' })
-  async findOne(@Param('id') id: string) {
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('role') role: Role,
+  ) {
+    if (role !== Role.SUPER_ADMIN && id !== tenantId) {
+      throw new ForbiddenException('Cannot access another workspace');
+    }
     return this.tenantService.findOne(id);
   }
 
@@ -91,9 +124,11 @@ export class TenantController {
   async update(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('role') role: Role,
     @Body() dto: UpdateTenantDto,
   ) {
-    return this.tenantService.update(id, tenantId, dto);
+    const effectiveTenantId = role === Role.SUPER_ADMIN ? id : tenantId;
+    return this.tenantService.update(id, effectiveTenantId, dto);
   }
 
   @Patch(':id/theme')
@@ -104,8 +139,10 @@ export class TenantController {
   async updateTheme(
     @Param('id') id: string,
     @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('role') role: Role,
     @Body() dto: UpdateThemeDto,
   ) {
-    return this.tenantService.updateTheme(id, tenantId, dto);
+    const effectiveTenantId = role === Role.SUPER_ADMIN ? id : tenantId;
+    return this.tenantService.updateTheme(id, effectiveTenantId, dto);
   }
 }

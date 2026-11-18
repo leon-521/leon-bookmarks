@@ -10,22 +10,24 @@ import { billingService } from '@/lib/services';
 import type { PricingPlan } from '@/lib/services';
 import { cn } from '@/lib/utils';
 
+import { useAuth } from '@/hooks/use-auth';
+
 const fallbackPlans: PricingPlan[] = [
   {
     id: 'free',
     name: 'Free',
     price: 0,
     interval: null,
-    features: ['Up to 100 bookmarks', '3 categories', '1 team member', 'Public portal', 'Basic analytics'],
-    limits: { maxBookmarks: 100, maxMembers: 1, maxCategories: 3 },
+    features: ['Up to 500 bookmarks', 'Unlimited categories', '5 team members', 'Public portal', 'AI smart organize'],
+    limits: { maxBookmarks: 500, maxMembers: 5, maxCategories: -1 },
   },
   {
     id: 'pro',
     name: 'Pro',
     price: 9.99,
     interval: 'month',
-    features: ['Up to 5,000 bookmarks', 'Unlimited categories', '10 team members', 'Custom domain', 'Advanced analytics', 'Priority support', 'Custom branding', 'API access'],
-    limits: { maxBookmarks: 5000, maxMembers: 10, maxCategories: -1 },
+    features: ['Up to 5,000 bookmarks', 'Unlimited categories', '50 team members', 'Custom domain', 'Advanced analytics', 'Priority support', 'Custom branding', 'API access'],
+    limits: { maxBookmarks: 5000, maxMembers: 50, maxCategories: -1 },
   },
   {
     id: 'enterprise',
@@ -109,6 +111,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 }
 
 export default function PricingPage() {
+  const { isAuthenticated } = useAuth();
   const [plans, setPlans] = React.useState<PricingPlan[]>([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -211,21 +214,21 @@ export default function PricingPage() {
                     </ul>
 
                     {isFree ? (
-                      <Link href="/register">
+                      <Link href={isAuthenticated ? '/dashboard' : '/register'}>
                         <Button variant="outline" size="lg" className="w-full">
-                          Get Started
+                          {isAuthenticated ? 'Go to Dashboard' : 'Get Started'}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
                       </Link>
                     ) : isEnterprise ? (
-                      <Link href="mailto:sales@leon.app">
+                      <Link href={isAuthenticated ? '/settings/billing' : 'mailto:sales@leon.app'}>
                         <Button variant="secondary" size="lg" className="w-full">
-                          Contact Sales
+                          {isAuthenticated ? 'Manage Plan' : 'Contact Sales'}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
                       </Link>
                     ) : (
-                      <Link href="/register">
+                      <Link href={isAuthenticated ? '/settings/billing' : '/register'}>
                         <Button size="lg" className="w-full shadow-md hover:shadow-lg">
                           Upgrade to Pro
                           <ArrowRight className="h-4 w-4" />

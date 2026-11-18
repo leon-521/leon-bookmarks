@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Search, Building2, MoreHorizontal, Eye, Snowflake, Power, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Building2, MoreHorizontal, ExternalLink, Snowflake, Power, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,37 +23,34 @@ import {
 import { adminService } from '@/lib/services';
 import { cn } from '@/lib/utils';
 
-interface Tenant {
+interface AdminTenant {
   id: string;
   name: string;
   slug: string;
   plan: string;
-  status: string;
-  bookmarkCount: number;
-  memberCount: number;
+  isActive: boolean;
   createdAt: string;
+  _count?: {
+    bookmarks: number;
+    users: number;
+    categories: number;
+  };
 }
 
-interface TenantsResponse {
-  tenants: Tenant[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+interface TenantsPaginatedResponse {
+  data: AdminTenant[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 const planBadgeVariant = (plan: string): 'default' | 'secondary' | 'success' | 'warning' | 'danger' => {
   switch (plan?.toLowerCase()) {
     case 'enterprise': return 'warning';
     case 'pro': return 'default';
-    default: return 'secondary';
-  }
-};
-
-const statusBadgeVariant = (status: string): 'default' | 'secondary' | 'success' | 'warning' | 'danger' => {
-  switch (status?.toLowerCase()) {
-    case 'active': return 'success';
-    case 'frozen': return 'danger';
     default: return 'secondary';
   }
 };
@@ -78,8 +75,9 @@ function TableSkeleton() {
 }
 
 export default function TenantsPage() {
-  const [data, setData] = React.useState<TenantsResponse | null>(null);
+  const [data, setData] = React.useState<TenantsPaginatedResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [planFilter, setPlanFilter] = React.useState('all');
@@ -89,13 +87,15 @@ export default function TenantsPage() {
   const fetchTenants = React.useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { page: String(page), pageSize: '10' };
+      const params: Record<string, string> = { page: String(page), limit: '10' };
       if (search) params.search = search;
       if (planFilter !== 'all') params.plan = planFilter;
       if (statusFilter !== 'all') params.status = statusFilter;
       const result = await adminService.listTenants(params);
       setData(result);
-    } catch {
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load tenants');
       setData(null);
     } finally {
       setLoading(false);
@@ -111,39 +111,47 @@ export default function TenantsPage() {
     setPage(1);
   }, []);
 
-  const handleFreeze = async (tenant: Tenant) => {
+  const handleFreeze = async (tenant: AdminTenant) => {
     setActionLoading(tenant.id);
     try {
-      if (tenant.status === 'frozen') {
+      if (!tenant.isActive) {
         await adminService.activateTenant(tenant.id);
       } else {
         await adminService.freezeTenant(tenant.id);
       }
       await fetchTenants();
-    } catch {
-      // Silently handle
+    } catch (err: any) {
+      setError(err.message || 'Failed to update tenant status');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDelete = async (tenant: Tenant) => {
+  const handleDelete = async (tenant: AdminTenant) => {
     if (!window.confirm(`Are you sure you want to delete "${tenant.name}"? This action cannot be undone.`)) return;
     setActionLoading(tenant.id);
     try {
       await adminService.deleteTenant(tenant.id);
       await fetchTenants();
-    } catch {
-      // Silently handle
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete tenant');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const totalPages = data?.totalPages || 1;
+  const tenants = data?.data || [];
+  const meta = data?.meta;
+  const totalPages = meta?.totalPages || 1;
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {error && (
+        <div className="rounded-lg border border-danger/20 bg-danger-light px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
@@ -161,9 +169,9 @@ export default function TenantsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Plans</SelectItem>
-              <SelectItem value="free">Free</SelectItem>
-              <SelectItem value="pro">Pro</SelectItem>
-              <SelectItem value="enterprise">Enterprise</SelectItem>
+              <SelectItem value="FREE">Free</SelectItem>
+              <SelectItem value="PRO">Pro</SelectItem>
+              <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
@@ -200,7 +208,7 @@ export default function TenantsPage() {
                 <tr>
                   <td colSpan={8}><TableSkeleton /></td>
                 </tr>
-              ) : data?.tenants.length === 0 ? (
+              ) : tenants.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-16 text-center">
                     <Building2 className="h-10 w-10 text-text-tertiary mx-auto mb-3" />
@@ -209,7 +217,7 @@ export default function TenantsPage() {
                   </td>
                 </tr>
               ) : (
-                data?.tenants.map((tenant) => (
+                tenants.map((tenant) => (
                   <tr
                     key={tenant.id}
                     className={cn(
@@ -222,10 +230,16 @@ export default function TenantsPage() {
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <Badge variant={planBadgeVariant(tenant.plan)}>{tenant.plan}</Badge>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right tabular-nums">{tenant.bookmarkCount.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right tabular-nums">{tenant.memberCount}</td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right tabular-nums">
+                      {(tenant._count?.bookmarks ?? 0).toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right tabular-nums">
+                      {tenant._count?.users ?? 0}
+                    </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
-                      <Badge variant={statusBadgeVariant(tenant.status)}>{tenant.status}</Badge>
+                      <Badge variant={tenant.isActive ? 'success' : 'danger'}>
+                        {tenant.isActive ? 'Active' : 'Frozen'}
+                      </Badge>
                     </td>
                     <td className="px-5 py-3.5 text-sm text-text-tertiary whitespace-nowrap">
                       {new Date(tenant.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -238,15 +252,18 @@ export default function TenantsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem icon={<Eye className="h-4 w-4" />}>
-                            View Details
+                          <DropdownMenuItem
+                            icon={<ExternalLink className="h-4 w-4" />}
+                            onClick={() => window.open(`/portal/${tenant.slug}`, '_blank', 'noopener,noreferrer')}
+                          >
+                            Open Portal
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            icon={tenant.status === 'frozen' ? <Power className="h-4 w-4" /> : <Snowflake className="h-4 w-4" />}
+                            icon={!tenant.isActive ? <Power className="h-4 w-4" /> : <Snowflake className="h-4 w-4" />}
                             onClick={() => handleFreeze(tenant)}
                           >
-                            {tenant.status === 'frozen' ? 'Activate' : 'Freeze'}
+                            {!tenant.isActive ? 'Activate' : 'Freeze'}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             icon={<Trash2 className="h-4 w-4" />}
@@ -266,10 +283,10 @@ export default function TenantsPage() {
         </div>
 
         {/* Pagination */}
-        {!loading && data && data.totalPages > 1 && (
+        {!loading && meta && meta.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-border px-5 py-3">
             <p className="text-xs text-text-tertiary">
-              Showing {((page - 1) * (data.pageSize || 10)) + 1}–{Math.min(page * (data.pageSize || 10), data.total)} of {data.total}
+              Showing {((page - 1) * meta.limit) + 1}–{Math.min(page * meta.limit, meta.total)} of {meta.total}
             </p>
             <div className="flex items-center gap-1">
               <Button

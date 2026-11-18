@@ -16,9 +16,12 @@ function getApiBaseUrl(): string {
 interface RequestConfig {
   headers?: Record<string, string>;
   params?: Record<string, string>;
+  _retried?: boolean;
 }
 
 class ApiClient {
+  private refreshPromise: Promise<string | null> | null = null;
+
   private getAuthHeaders(): Record<string, string> {
     if (typeof window === 'undefined') return {};
     const token = localStorage.getItem('auth_token');
@@ -30,20 +33,15 @@ class ApiClient {
     const url = new URL(`${baseUrl}${path}`);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.append(key, value);
+        if (value !== undefined && value !== '') {
+          url.searchParams.append(key, value);
+        }
       });
     }
     return url.toString();
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      const message = (errorBody as { message?: string }).message || `HTTP ${response.status}: ${response.statusText}`;
-      throw new ApiError(response.status, message);
-    }
-    if (response.status === 204) return undefined as T;
-    const json = await response.json();
+  private unwrapEnvelope<T>(json: any): T {
     if (
       json &&
       typeof json === 'object' &&
@@ -58,54 +56,125 @@ class ApiClient {
     return json as T;
   }
 
-  async get<T>(path: string, config?: RequestConfig): Promise<T> {
-    const response = await fetch(this.buildUrl(path, config?.params), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-        ...config?.headers,
-      },
-    });
-    return this.handleResponse<T>(response);
+  private clearAuthAndRedirect() {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_tenant');
+    const pathname = window.location.pathname;
+    const isPublicRoute =
+      pathname === '/' ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/register') ||
+      pathname.startsWith('/pricing') ||
+      pathname.startsWith('/portal');
+    if (!isPublicRoute) {
+      window.location.href = '/login';
+    }
   }
 
-  async post<T>(path: string, data?: unknown, config?: RequestConfig): Promise<T> {
-    const response = await fetch(this.buildUrl(path, config?.params), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-        ...config?.headers,
-      },
-      body: data ? JSON.stringify(data) : undefined,
-    });
-    return this.handleResponse<T>(response);
+  private async tryRefreshAccessToken(): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) return null;
+
+    if (!this.refreshPromise) {
+      this.refreshPromise = (async () => {
+        try {
+          const res = await fetch(this.buildUrl('/auth/refresh'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+          if (!res.ok) return null;
+          const raw = await res.json();
+          const tokens = this.unwrapEnvelope<{ accessToken: string; refreshToken: string }>(raw);
+          if (tokens?.accessToken) {
+            localStorage.setItem('auth_token', tokens.accessToken);
+            if (tokens.refreshToken) {
+              localStorage.setItem('refresh_token', tokens.refreshToken);
+            }
+            return tokens.accessToken;
+          }
+          return null;
+        } catch {
+          return null;
+        } finally {
+          this.refreshPromise = null;
+        }
+      })();
+    }
+
+    return this.refreshPromise;
   }
 
-  async patch<T>(path: string, data?: unknown, config?: RequestConfig): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    data?: unknown,
+    config?: RequestConfig,
+  ): Promise<T> {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const headers: Record<string, string> = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...this.getAuthHeaders(),
+      ...config?.headers,
+    };
+
     const response = await fetch(this.buildUrl(path, config?.params), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-        ...config?.headers,
-      },
-      body: data ? JSON.stringify(data) : undefined,
+      method,
+      headers,
+      body:
+        data === undefined
+          ? undefined
+          : isFormData
+            ? (data as FormData)
+            : JSON.stringify(data),
     });
-    return this.handleResponse<T>(response);
+
+    if (
+      response.status === 401 &&
+      !config?._retried &&
+      !path.startsWith('/auth/login') &&
+      !path.startsWith('/auth/register') &&
+      !path.startsWith('/auth/refresh')
+    ) {
+      const newToken = await this.tryRefreshAccessToken();
+      if (newToken) {
+        return this.request<T>(method, path, data, { ...config, _retried: true });
+      }
+      this.clearAuthAndRedirect();
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      const rawMsg = (errorBody as { message?: string | string[] }).message;
+      const message = Array.isArray(rawMsg)
+        ? rawMsg.join(', ')
+        : rawMsg || `HTTP ${response.status}: ${response.statusText}`;
+      throw new ApiError(response.status, message);
+    }
+
+    if (response.status === 204) return undefined as T;
+    const json = await response.json();
+    return this.unwrapEnvelope<T>(json);
   }
 
-  async delete<T>(path: string, config?: RequestConfig): Promise<T> {
-    const response = await fetch(this.buildUrl(path, config?.params), {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-        ...config?.headers,
-      },
-    });
-    return this.handleResponse<T>(response);
+  get<T>(path: string, config?: RequestConfig): Promise<T> {
+    return this.request<T>('GET', path, undefined, config);
+  }
+
+  post<T>(path: string, data?: unknown, config?: RequestConfig): Promise<T> {
+    return this.request<T>('POST', path, data, config);
+  }
+
+  patch<T>(path: string, data?: unknown, config?: RequestConfig): Promise<T> {
+    return this.request<T>('PATCH', path, data, config);
+  }
+
+  delete<T>(path: string, config?: RequestConfig): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, config);
   }
 }
 

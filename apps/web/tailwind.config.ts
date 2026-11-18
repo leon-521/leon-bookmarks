@@ -64,8 +64,8 @@ const config: Config = {
         'glow': 'var(--shadow-glow)',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['var(--font-jakarta)', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         'xs': ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.01em' }],

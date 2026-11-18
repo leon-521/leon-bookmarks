@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
 import {
   Bookmark as BookmarkIcon,
@@ -17,14 +18,36 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import { useBookmarks } from '@/hooks/use-bookmarks';
+import { useCategories } from '@/hooks/use-categories';
+import { tenantService } from '@/lib/services';
 import { getDomainFromUrl, cn } from '@/lib/utils';
 
 export default function DashboardPage() {
   const { user, tenant } = useAuth();
   const { data: bookmarksData, isLoading } = useBookmarks({ limit: 5, sortBy: 'createdAt', sortOrder: 'desc' });
+  const { data: categories } = useCategories();
+  const [memberCount, setMemberCount] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    tenantService
+      .listMembers()
+      .then((res) => {
+        if (!cancelled) {
+          setMemberCount(res?.quota?.used ?? res?.members?.length ?? null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const bookmarks = bookmarksData?.data ?? bookmarksData ?? [];
-  const totalBookmarks = bookmarksData?.meta?.total ?? (Array.isArray(bookmarksData) ? bookmarksData.length : 0);
+  const bookmarkList = Array.isArray(bookmarks) ? bookmarks : [];
+  const totalBookmarks = bookmarksData?.meta?.total ?? bookmarkList.length;
+  const totalCategories = Array.isArray(categories) ? categories.length : 0;
+  const recentClicks = bookmarkList.reduce((sum: number, b: any) => sum + (b.clickCount || 0), 0);
 
   const quickStats = [
     {
@@ -37,7 +60,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Categories',
-      value: '--',
+      value: String(totalCategories),
       change: 'Organized',
       icon: FolderTree,
       color: 'text-success',
@@ -45,16 +68,16 @@ export default function DashboardPage() {
     },
     {
       label: 'Team Members',
-      value: '--',
+      value: memberCount !== null ? String(memberCount) : '--',
       change: 'Active',
       icon: Users,
       color: 'text-warning',
       bgColor: 'bg-warning-light',
     },
     {
-      label: 'Portal Views',
-      value: '--',
-      change: 'Tracking',
+      label: 'Recent Link Clicks',
+      value: String(recentClicks),
+      change: 'Tracked',
       icon: TrendingUp,
       color: 'text-violet-500',
       bgColor: 'bg-violet-50',
@@ -120,40 +143,54 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))
+            ) : bookmarkList.length === 0 ? (
+              <div className="px-5 py-12 text-center text-sm text-text-secondary">
+                No bookmarks yet. Click &ldquo;Add Bookmark&rdquo; to save your first link!
+              </div>
             ) : (
-              (Array.isArray(bookmarks) ? bookmarks : []).slice(0, 5).map((bookmark: any) => (
-                <div key={bookmark.id} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-bg-secondary">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-secondary">
-                    {bookmark.faviconUrl || bookmark.favicon ? (
-                      <img src={bookmark.faviconUrl || bookmark.favicon} alt="" className="h-5 w-5 rounded-sm object-contain" />
-                    ) : (
-                      <Globe className="h-4 w-4 text-text-tertiary" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
+              bookmarkList.slice(0, 5).map((bookmark: any) => {
+                const fav = bookmark.faviconUrl || bookmark.favicon;
+                return (
+                  <div key={bookmark.id} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-bg-secondary">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-secondary">
+                      {fav ? (
+                        <img
+                          src={fav}
+                          alt=""
+                          className="h-5 w-5 rounded-sm object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <Globe className={cn('h-4 w-4 text-text-tertiary', Boolean(fav) && 'hidden')} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={bookmark.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate text-sm font-medium text-text-primary hover:text-accent transition-colors"
+                      >
+                        {bookmark.title}
+                      </a>
+                      <span className="text-xs text-text-tertiary">{getDomainFromUrl(bookmark.url)}</span>
+                    </div>
+                    <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 text-[11px]">
+                      {bookmark.category?.name || bookmark.categoryName || 'Uncategorized'}
+                    </Badge>
                     <a
                       href={bookmark.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block truncate text-sm font-medium text-text-primary hover:text-accent transition-colors"
+                      className="shrink-0 rounded-md p-1 text-text-tertiary hover:text-accent hover:bg-bg-secondary transition-colors"
                     >
-                      {bookmark.title}
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </a>
-                    <span className="text-xs text-text-tertiary">{getDomainFromUrl(bookmark.url)}</span>
                   </div>
-                  <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 text-[11px]">
-                    {bookmark.category?.name || bookmark.categoryName || 'Uncategorized'}
-                  </Badge>
-                  <a
-                    href={bookmark.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 rounded-md p-1 text-text-tertiary hover:text-accent hover:bg-bg-secondary transition-colors"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -27,43 +27,49 @@ import {
 import { adminService } from '@/lib/services';
 import { cn } from '@/lib/utils';
 
-interface User {
+interface AdminUser {
   id: string;
   name: string;
   email: string;
   role: string;
-  tenantName: string;
-  lastLoginAt: string | null;
+  lastLogin: string | null;
+  tenant?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
 }
 
-interface UsersResponse {
-  users: User[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+interface UsersPaginatedResponse {
+  data: AdminUser[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 const roleBadgeVariant = (role: string): 'default' | 'secondary' | 'success' | 'warning' | 'danger' => {
-  switch (role?.toLowerCase()) {
-    case 'super_admin': return 'danger';
-    case 'admin': return 'warning';
-    case 'editor': return 'default';
+  switch (role?.toUpperCase()) {
+    case 'SUPER_ADMIN': return 'danger';
+    case 'ADMIN': return 'warning';
+    case 'EDITOR': return 'default';
     default: return 'secondary';
   }
 };
 
 const roleDisplayLabel = (role: string) => {
-  switch (role?.toLowerCase()) {
-    case 'super_admin': return 'Super Admin';
-    case 'admin': return 'Admin';
-    case 'editor': return 'Editor';
-    case 'viewer': return 'Viewer';
+  switch (role?.toUpperCase()) {
+    case 'SUPER_ADMIN': return 'Super Admin';
+    case 'ADMIN': return 'Admin';
+    case 'EDITOR': return 'Editor';
+    case 'VIEWER': return 'Viewer';
     default: return role;
   }
 };
 
-const availableRoles = ['admin', 'editor', 'viewer'];
+const availableRoles = ['SUPER_ADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
 
 function TableSkeleton() {
   return (
@@ -86,8 +92,9 @@ function TableSkeleton() {
 }
 
 export default function UsersPage() {
-  const [data, setData] = React.useState<UsersResponse | null>(null);
+  const [data, setData] = React.useState<UsersPaginatedResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [roleFilter, setRoleFilter] = React.useState('all');
@@ -96,12 +103,14 @@ export default function UsersPage() {
   const fetchUsers = React.useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { page: String(page), pageSize: '10' };
+      const params: Record<string, string> = { page: String(page), limit: '10' };
       if (search) params.search = search;
       if (roleFilter !== 'all') params.role = roleFilter;
       const result = await adminService.listUsers(params);
       setData(result);
-    } catch {
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load users');
       setData(null);
     } finally {
       setLoading(false);
@@ -117,36 +126,44 @@ export default function UsersPage() {
     setPage(1);
   }, []);
 
-  const handleChangeRole = async (user: User, newRole: string) => {
-    if (user.role === newRole) return;
+  const handleChangeRole = async (user: AdminUser, newRole: string) => {
+    if (user.role?.toUpperCase() === newRole) return;
     setActionLoading(user.id);
     try {
       await adminService.updateUserRole(user.id, newRole);
       await fetchUsers();
-    } catch {
-      // Silently handle
+    } catch (err: any) {
+      setError(err.message || 'Failed to change user role');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDelete = async (user: User) => {
+  const handleDelete = async (user: AdminUser) => {
     if (!window.confirm(`Are you sure you want to delete user "${user.name}"? This action cannot be undone.`)) return;
     setActionLoading(user.id);
     try {
       await adminService.deleteUser(user.id);
       await fetchUsers();
-    } catch {
-      // Silently handle
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete user');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const totalPages = data?.totalPages || 1;
+  const users = data?.data || [];
+  const meta = data?.meta;
+  const totalPages = meta?.totalPages || 1;
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {error && (
+        <div className="rounded-lg border border-danger/20 bg-danger-light px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
@@ -163,10 +180,10 @@ export default function UsersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="super_admin">Super Admin</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="editor">Editor</SelectItem>
-            <SelectItem value="viewer">Viewer</SelectItem>
+            <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
+            <SelectItem value="ADMIN">Admin</SelectItem>
+            <SelectItem value="EDITOR">Editor</SelectItem>
+            <SelectItem value="VIEWER">Viewer</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -189,7 +206,7 @@ export default function UsersPage() {
                 <tr>
                   <td colSpan={5}><TableSkeleton /></td>
                 </tr>
-              ) : data?.users.length === 0 ? (
+              ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-16 text-center">
                     <Users className="h-10 w-10 text-text-tertiary mx-auto mb-3" />
@@ -198,7 +215,7 @@ export default function UsersPage() {
                   </td>
                 </tr>
               ) : (
-                data?.users.map((user) => (
+                users.map((user) => (
                   <tr
                     key={user.id}
                     className={cn(
@@ -220,10 +237,12 @@ export default function UsersPage() {
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <Badge variant={roleBadgeVariant(user.role)}>{roleDisplayLabel(user.role)}</Badge>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary whitespace-nowrap">{user.tenantName || '—'}</td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary whitespace-nowrap">
+                      {user.tenant?.name || '—'}
+                    </td>
                     <td className="px-5 py-3.5 text-sm text-text-tertiary whitespace-nowrap">
-                      {user.lastLoginAt
-                        ? new Date(user.lastLoginAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      {user.lastLogin
+                        ? new Date(user.lastLogin).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                         : 'Never'}
                     </td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
@@ -245,10 +264,10 @@ export default function UsersPage() {
                                   <DropdownMenuItem
                                     key={role}
                                     onClick={() => handleChangeRole(user, role)}
-                                    className={cn(user.role === role && 'font-semibold text-accent')}
+                                    className={cn(user.role?.toUpperCase() === role && 'font-semibold text-accent')}
                                   >
                                     {roleDisplayLabel(role)}
-                                    {user.role === role && <span className="ml-auto text-xs text-accent">Current</span>}
+                                    {user.role?.toUpperCase() === role && <span className="ml-auto text-xs text-accent">Current</span>}
                                   </DropdownMenuItem>
                                 ))}
                               </DropdownMenuSubContent>
@@ -273,10 +292,10 @@ export default function UsersPage() {
         </div>
 
         {/* Pagination */}
-        {!loading && data && data.totalPages > 1 && (
+        {!loading && meta && meta.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-border px-5 py-3">
             <p className="text-xs text-text-tertiary">
-              Showing {((page - 1) * (data.pageSize || 10)) + 1}–{Math.min(page * (data.pageSize || 10), data.total)} of {data.total}
+              Showing {((page - 1) * meta.limit) + 1}–{Math.min(page * meta.limit, meta.total)} of {meta.total}
             </p>
             <div className="flex items-center gap-1">
               <Button

@@ -1,12 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { Save, Upload, Globe, Paintbrush } from 'lucide-react';
+import Link from 'next/link';
+import { Save, Globe, Paintbrush, CreditCard, Image as ImageIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { tenantService } from '@/lib/services';
 
 const tabs = [
   { id: 'general', label: 'General', icon: Globe },
@@ -31,11 +33,14 @@ const layoutOptions = [
 ];
 
 export default function SettingsPage() {
-  const { tenant } = useAuth();
+  const { tenant, updateTenantInfo } = useAuth();
   const [activeTab, setActiveTab] = React.useState<TabId>('general');
+  const [saving, setSaving] = React.useState(false);
+  const [feedback, setFeedback] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [settings, setSettings] = React.useState({
     name: tenant?.name || '',
     slug: tenant?.slug || '',
+    logo: '',
     accentColor: '#3b82f6',
     layout: 'grid',
     borderRadius: 12,
@@ -43,17 +48,93 @@ export default function SettingsPage() {
     customDomain: '',
   });
 
+  React.useEffect(() => {
+    if (!tenant?.id) return;
+    let cancelled = false;
+    tenantService
+      .getOne(tenant.id)
+      .then((t) => {
+        if (cancelled) return;
+        const tc = t.themeConfig || {};
+        setSettings({
+          name: t.name || '',
+          slug: t.slug || '',
+          logo: t.logo || '',
+          accentColor: tc.accentColor || '#3b82f6',
+          layout: tc.layout || 'grid',
+          borderRadius: typeof tc.borderRadius === 'number' ? tc.borderRadius : 12,
+          cardSpacing: typeof tc.cardSpacing === 'number' ? tc.cardSpacing : 16,
+          customDomain: t.customDomain || '',
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant?.id]);
+
+  const handleSave = async () => {
+    if (!tenant?.id) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await tenantService.update(tenant.id, {
+        name: settings.name.trim(),
+        logo: settings.logo.trim() || undefined,
+        customDomain: settings.customDomain.trim() || undefined,
+      });
+      await tenantService.updateTheme(tenant.id, {
+        accentColor: settings.accentColor,
+        layout: settings.layout,
+        borderRadius: settings.borderRadius,
+        cardSpacing: settings.cardSpacing,
+      });
+      updateTenantInfo({ name: updated.name });
+      setFeedback({ type: 'success', message: 'Settings saved successfully.' });
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err?.message || 'Failed to save settings.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
         title="Settings"
         description="Manage your workspace configuration and appearance."
       >
-        <Button className="gap-2">
-          <Save className="h-4 w-4" />
-          Save Changes
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/settings/billing">
+            <Button variant="outline" className="gap-2">
+              <CreditCard className="h-4 w-4" />
+              Billing &amp; Plan
+            </Button>
+          </Link>
+          <Button onClick={handleSave} loading={saving} className="gap-2">
+            <Save className="h-4 w-4" />
+            Save Changes
+          </Button>
+        </div>
       </PageHeader>
+
+      {feedback && (
+        <div
+          className={cn(
+            'mb-6 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm',
+            feedback.type === 'success'
+              ? 'border-success/20 bg-success-light text-success'
+              : 'border-danger/20 bg-danger-light text-danger'
+          )}
+        >
+          {feedback.type === 'success' ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0" />
+          )}
+          <span>{feedback.message}</span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg border border-border bg-bg-primary p-1">
@@ -89,24 +170,34 @@ export default function SettingsPage() {
               onChange={(e) => setSettings((s) => ({ ...s, name: e.target.value }))}
             />
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-text-primary">Logo</label>
-              <div className="flex items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center rounded-xl border-2 border-dashed border-border bg-bg-secondary text-text-tertiary">
-                  <Upload className="h-6 w-6" />
+            <div className="space-y-2">
+              <Input
+                label="Logo URL"
+                placeholder="https://example.com/logo.png"
+                value={settings.logo}
+                onChange={(e) => setSettings((s) => ({ ...s, logo: e.target.value }))}
+                iconLeft={<ImageIcon className="h-4 w-4" />}
+                helperText="Optional URL to an SVG, PNG, or JPG logo image"
+              />
+              {settings.logo && (
+                <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-border bg-bg-secondary overflow-hidden p-2">
+                  <img
+                    src={settings.logo}
+                    alt="Workspace logo preview"
+                    className="max-h-full max-w-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 </div>
-                <div>
-                  <Button variant="outline" size="sm">Upload Logo</Button>
-                  <p className="mt-1.5 text-xs text-text-tertiary">SVG, PNG, or JPG. Max 2MB.</p>
-                </div>
-              </div>
+              )}
             </div>
 
             <Input
               label="Workspace Slug"
               value={settings.slug}
-              onChange={(e) => setSettings((s) => ({ ...s, slug: e.target.value }))}
-              helperText={`Portal URL: leon.app/portal/${settings.slug}`}
+              disabled
+              helperText={`Public Portal URL: /portal/${settings.slug}`}
             />
           </div>
         </div>

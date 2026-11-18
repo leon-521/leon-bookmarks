@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Menu, Search, Sun, Moon, Bell } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Menu, Search, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -22,8 +23,21 @@ interface TopBarProps {
 }
 
 export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
+  const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = searchQuery.trim();
+    router.push(trimmed ? `/bookmarks?search=${encodeURIComponent(trimmed)}` : '/bookmarks');
+  };
+
+  const handleSignOut = () => {
+    logout();
+    router.replace('/login');
+  };
 
   return (
     <header
@@ -47,12 +61,14 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
       </Button>
 
       {/* Search bar */}
-      <div className="flex-1 max-w-xl mx-auto lg:mx-0">
+      <form onSubmit={handleSearchSubmit} className="flex-1 max-w-xl mx-auto lg:mx-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
           <input
             type="text"
-            placeholder="Search bookmarks, categories..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search bookmarks (press Enter)..."
             className={cn(
               'w-full h-9 rounded-lg border border-border bg-bg-secondary pl-9 pr-4 text-sm text-text-primary',
               'placeholder:text-text-tertiary',
@@ -61,7 +77,7 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
             )}
           />
         </div>
-      </div>
+      </form>
 
       {/* Right actions */}
       <div className="flex items-center gap-1 ml-4">
@@ -77,12 +93,6 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
           ) : (
             <Moon className="h-[18px] w-[18px]" />
           )}
-        </Button>
-
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative text-text-secondary">
-          <Bell className="h-[18px] w-[18px]" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-danger" />
         </Button>
 
         {/* User dropdown */}
@@ -103,11 +113,15 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/settings')}>
+              Workspace Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/settings/billing')}>
+              Billing &amp; Plan
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={logout}
+              onClick={handleSignOut}
               className="text-danger focus:text-danger"
             >
               Sign out

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Search, Sun, Moon, ExternalLink, Globe, Sparkles, X } from 'lucide-react';
 import { cn, getDomainFromUrl } from '@/lib/utils';
+import { portalService } from '@/lib/services';
 
 interface PortalBookmark {
   id: string;
@@ -38,6 +39,27 @@ interface PortalData {
   stats: { totalBookmarks: number; totalCategories: number };
 }
 
+function collectCategoryIds(cat: PortalCategory, ids = new Set<string>()): Set<string> {
+  ids.add(cat.id);
+  if (cat.children) {
+    for (const child of cat.children) {
+      collectCategoryIds(child, ids);
+    }
+  }
+  return ids;
+}
+
+function findPortalCategory(cats: PortalCategory[], id: string): PortalCategory | null {
+  for (const cat of cats) {
+    if (cat.id === id) return cat;
+    if (cat.children) {
+      const found = findPortalCategory(cat.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export default function PortalPage({ params }: { params: { slug: string } }) {
   const [search, setSearch] = React.useState('');
   const [isDark, setIsDark] = React.useState(false);
@@ -46,25 +68,27 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
   React.useEffect(() => {
+    let cancelled = false;
     const fetchPortal = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${apiUrl}/portal/${params.slug}`);
-        if (!res.ok) throw new Error(`Portal not found`);
-        const json = await res.json();
-        // Handle both wrapped { data } and direct response
-        setData(json.data || json);
+        const res = await portalService.getData(params.slug);
+        if (!cancelled) {
+          setData(res as PortalData);
+          setError(null);
+        }
       } catch (err: any) {
-        setError(err.message);
+        if (!cancelled) setError(err?.message || 'Portal not found');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetchPortal();
-  }, [params.slug, apiUrl]);
+    return () => {
+      cancelled = true;
+    };
+  }, [params.slug]);
 
   if (loading) {
     return (
@@ -92,6 +116,13 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
   const { tenant, categories, bookmarks } = data;
   const accentColor = tenant.themeConfig?.accentColor || '#3b82f6';
 
+  const selectedCategoryIds = selectedCategory
+    ? (() => {
+        const target = findPortalCategory(categories, selectedCategory);
+        return target ? collectCategoryIds(target) : new Set([selectedCategory]);
+      })()
+    : null;
+
   const filteredBookmarks = bookmarks.filter((b) => {
     const matchesSearch =
       !search ||
@@ -99,26 +130,35 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
       (b.description || '').toLowerCase().includes(search.toLowerCase()) ||
       b.url.toLowerCase().includes(search.toLowerCase());
 
-    const matchesCategory = !selectedCategory || b.categoryId === selectedCategory ||
-      categories.find((c) => c.id === selectedCategory)?.children?.some((child) => child.id === b.categoryId);
+    const matchesCategory =
+      !selectedCategoryIds || (b.categoryId ? selectedCategoryIds.has(b.categoryId) : false);
 
     return matchesSearch && matchesCategory;
   });
 
+  const allAssignedIds = new Set<string>();
   const groupedBookmarks = categories.reduce(
     (acc, category) => {
+      const catIds = collectCategoryIds(category);
       const categoryBookmarks = filteredBookmarks.filter(
-        (b) =>
-          b.categoryId === category.id ||
-          category.children?.some((child) => child.id === b.categoryId)
+        (b) => b.categoryId && catIds.has(b.categoryId)
       );
       if (categoryBookmarks.length > 0) {
+        categoryBookmarks.forEach((b) => allAssignedIds.add(b.id));
         acc.push({ category, bookmarks: categoryBookmarks });
       }
       return acc;
     },
     [] as { category: PortalCategory; bookmarks: PortalBookmark[] }[]
   );
+
+  const uncategorizedBookmarks = filteredBookmarks.filter((b) => !allAssignedIds.has(b.id));
+  if (uncategorizedBookmarks.length > 0) {
+    groupedBookmarks.push({
+      category: { id: '__uncategorized__', name: 'Other Links' },
+      bookmarks: uncategorizedBookmarks,
+    });
+  }
 
   return (
     <div
@@ -365,10 +405,20 @@ function PortalBookmarkCard({
           style={{ backgroundColor: isDark ? '#334155' : '#f1f3f7' }}
         >
           {bookmark.faviconUrl ? (
-            <img src={bookmark.faviconUrl} alt="" className="h-5 w-5 rounded-sm object-contain" />
-          ) : (
-            <Globe className="h-5 w-5" style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
-          )}
+            <img
+              src={bookmark.faviconUrl}
+              alt=""
+              className="h-5 w-5 rounded-sm object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+                (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+          ) : null}
+          <Globe
+            className={cn('h-5 w-5', Boolean(bookmark.faviconUrl) && 'hidden')}
+            style={{ color: isDark ? '#64748b' : '#94a3b8' }}
+          />
         </div>
         <div className="min-w-0 flex-1">
           <h3

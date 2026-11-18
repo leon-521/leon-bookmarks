@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { authService, type AuthResponse, type MeResponse } from '@/lib/services';
+import { authService, type AuthResponse } from '@/lib/services';
 
 interface AuthState {
   user: AuthResponse['user'] | null;
@@ -7,11 +7,13 @@ interface AuthState {
   token: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  isHydrated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string; tenantName: string; tenantSlug: string }) => Promise<void>;
   logout: () => void;
   setFromResponse: (res: AuthResponse) => void;
+  updateTenantInfo: (patch: Partial<AuthResponse['tenant']>) => void;
   hydrate: () => void;
 }
 
@@ -21,6 +23,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   token: null,
   refreshToken: null,
   isAuthenticated: false,
+  isHydrated: false,
   isLoading: false,
 
   login: async (email: string, password: string) => {
@@ -58,6 +61,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       token: null,
       refreshToken: null,
       isAuthenticated: false,
+      isHydrated: true,
       isLoading: false,
     });
   },
@@ -75,8 +79,19 @@ export const useAuth = create<AuthState>((set, get) => ({
       token: res.accessToken,
       refreshToken: res.refreshToken,
       isAuthenticated: true,
+      isHydrated: true,
       isLoading: false,
     });
+  },
+
+  updateTenantInfo: (patch) => {
+    const current = get().tenant;
+    if (!current) return;
+    const updated = { ...current, ...patch };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_tenant', JSON.stringify(updated));
+    }
+    set({ tenant: updated });
   },
 
   hydrate: () => {
@@ -92,13 +107,16 @@ export const useAuth = create<AuthState>((set, get) => ({
           user: JSON.parse(userStr),
           tenant: JSON.parse(tenantStr),
           isAuthenticated: true,
+          isHydrated: true,
         });
+        return;
       } catch {
-        // corrupted data, clear it
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
         localStorage.removeItem('auth_user');
         localStorage.removeItem('auth_tenant');
       }
     }
+    set({ isHydrated: true });
   },
 }));

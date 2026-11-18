@@ -93,6 +93,7 @@ services:
       JWT_SECRET: LeonJwt2024SecretKeyChangeMe!1234
       JWT_EXPIRATION: 15m
       JWT_REFRESH_EXPIRATION: 7d
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       REDIS_URL: redis://redis:6379
       MEILI_URL: http://meilisearch:7700
       MEILI_MASTER_KEY: LeonMeili2024!Key

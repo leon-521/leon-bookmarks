@@ -4,14 +4,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Plan } from '@prisma/client';
 import { Request } from 'express';
 
-// Plan definitions with Stripe price IDs
 const PLANS = {
   FREE: {
     id: 'free',
     name: 'Free',
     price: 0,
     interval: null,
-    stripePriceId: null,
     features: [
       '500 bookmarks',
       '5 team members',
@@ -26,7 +24,6 @@ const PLANS = {
     name: 'Pro',
     price: 9.99,
     interval: 'month',
-    stripePriceId: process.env.STRIPE_PRO_PRICE_ID || 'price_pro_placeholder',
     features: [
       '5,000 bookmarks',
       '50 team members',
@@ -43,7 +40,6 @@ const PLANS = {
     name: 'Enterprise',
     price: 29.99,
     interval: 'month',
-    stripePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || 'price_enterprise_placeholder',
     features: [
       'Unlimited bookmarks',
       'Unlimited team members',
@@ -74,14 +70,13 @@ export class BillingService {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (secretKey) {
       try {
-        // Dynamic import to avoid issues when Stripe is not installed
         const StripeModule = await import('stripe').catch(() => null);
         if (StripeModule) {
           const Stripe = StripeModule.default || StripeModule;
           this.stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' as any });
           this.logger.log('Stripe initialized successfully');
         }
-      } catch (error) {
+      } catch {
         this.logger.warn('Stripe SDK not available. Billing features disabled.');
       }
     } else {
@@ -89,8 +84,15 @@ export class BillingService {
     }
   }
 
+  private getStripePriceId(planKey: 'PRO' | 'ENTERPRISE'): string {
+    if (planKey === 'PRO') {
+      return this.configService.get<string>('STRIPE_PRO_PRICE_ID', 'price_pro_placeholder');
+    }
+    return this.configService.get<string>('STRIPE_ENTERPRISE_PRICE_ID', 'price_enterprise_placeholder');
+  }
+
   getPlans() {
-    return Object.values(PLANS).map(plan => ({
+    return Object.values(PLANS).map((plan) => ({
       id: plan.id,
       name: plan.name,
       price: plan.price,
@@ -108,17 +110,24 @@ export class BillingService {
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const plan = PLANS[tenant.plan] || PLANS.FREE;
-    const bookmarkCount = await this.prisma.bookmark.count({ where: { tenantId } });
-    const memberCount = await this.prisma.user.count({ where: { tenantId } });
+    const [bookmarkCount, memberCount] = await Promise.all([
+      this.prisma.bookmark.count({ where: { tenantId } }),
+      this.prisma.user.count({ where: { tenantId } }),
+    ]);
 
     return {
-      currentPlan: {
-        ...plan,
-        stripePriceId: undefined, // Don't expose
-      },
+      currentPlan: plan,
       usage: {
-        bookmarks: { used: bookmarkCount, limit: tenant.maxBookmarks, percentage: tenant.maxBookmarks > 0 ? Math.round((bookmarkCount / tenant.maxBookmarks) * 100) : 0 },
-        members: { used: memberCount, limit: tenant.maxMembers, percentage: tenant.maxMembers > 0 ? Math.round((memberCount / tenant.maxMembers) * 100) : 0 },
+        bookmarks: {
+          used: bookmarkCount,
+          limit: tenant.maxBookmarks,
+          percentage: tenant.maxBookmarks > 0 ? Math.round((bookmarkCount / tenant.maxBookmarks) * 100) : 0,
+        },
+        members: {
+          used: memberCount,
+          limit: tenant.maxMembers,
+          percentage: tenant.maxMembers > 0 ? Math.round((memberCount / tenant.maxMembers) * 100) : 0,
+        },
       },
       canUpgrade: tenant.plan !== 'ENTERPRISE',
       canDowngrade: tenant.plan !== 'FREE',
@@ -126,14 +135,13 @@ export class BillingService {
   }
 
   async createCheckoutSession(tenantId: string, userId: string, planId: string) {
-    const planKey = planId.toUpperCase() as keyof typeof PLANS;
-    const plan = PLANS[planKey];
-    if (!plan || !plan.stripePriceId) {
-      throw new BadRequestException(`Invalid plan: ${planId}`);
+    const planKey = (planId || '').toUpperCase() as keyof typeof PLANS;
+    if (planKey !== 'PRO' && planKey !== 'ENTERPRISE') {
+      throw new BadRequestException(`Invalid upgrade plan: ${planId}`);
     }
 
     if (!this.stripe) {
-      // Mock mode — directly upgrade
+      // Mock mode — directly upgrade in database without redirecting to undefined
       return this.upgradePlan(tenantId, planKey as Plan);
     }
 
@@ -141,20 +149,28 @@ export class BillingService {
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000').split(',')[0].trim();
+    const stripePriceId = this.getStripePriceId(planKey);
 
     const session = await this.stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
-      customer_email: user?.email,
-      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-      success_url: `${frontendUrl}/settings?billing=success&plan=${planId}`,
-      cancel_url: `${frontendUrl}/settings?billing=cancelled`,
+      ...(tenant.stripeCustomerId
+        ? { customer: tenant.stripeCustomerId }
+        : { customer_email: user?.email }),
+      line_items: [{ price: stripePriceId, quantity: 1 }],
+      success_url: `${frontendUrl}/settings/billing?billing=success&plan=${planId.toLowerCase()}`,
+      cancel_url: `${frontendUrl}/settings/billing?billing=cancelled`,
       metadata: {
         tenantId,
         userId,
         planId: planKey,
+      },
+      subscription_data: {
+        metadata: {
+          tenantId,
+          planId: planKey,
+        },
       },
     });
 
@@ -163,18 +179,21 @@ export class BillingService {
 
   async createPortalSession(tenantId: string) {
     if (!this.stripe) {
-      return { portalUrl: '/settings', message: 'Stripe not configured. Manage plan in settings.' };
+      return { portalUrl: '/settings/billing', message: 'Stripe not configured. Manage plan directly in billing settings.' };
     }
 
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    if (!tenant.stripeCustomerId) {
+      throw new BadRequestException('No active Stripe customer found for this workspace');
+    }
 
-    // Note: In production, store Stripe customer ID on tenant
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000').split(',')[0].trim();
+
     const session = await this.stripe.billingPortal.sessions.create({
-      customer: `cus_${tenantId.substring(0, 14)}`, // Placeholder
-      return_url: `${frontendUrl}/settings`,
+      customer: tenant.stripeCustomerId,
+      return_url: `${frontendUrl}/settings/billing`,
     });
 
     return { portalUrl: session.url };
@@ -186,11 +205,13 @@ export class BillingService {
     }
 
     const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
-    let event: any;
+    if (!webhookSecret || !req.rawBody) {
+      throw new BadRequestException('Missing Stripe webhook secret or raw request body');
+    }
 
+    let event: any;
     try {
-      const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
-      event = this.stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+      event = this.stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
     } catch (err: any) {
       this.logger.error(`Webhook signature verification failed: ${err.message}`);
       throw new BadRequestException(`Webhook Error: ${err.message}`);
@@ -203,21 +224,28 @@ export class BillingService {
         const session = event.data.object;
         const { tenantId, planId } = session.metadata || {};
         if (tenantId && planId) {
-          await this.upgradePlan(tenantId, planId as Plan);
+          await this.upgradePlan(
+            tenantId,
+            planId as Plan,
+            typeof session.customer === 'string' ? session.customer : undefined,
+            typeof session.subscription === 'string' ? session.subscription : undefined,
+          );
           this.logger.log(`Tenant ${tenantId} upgraded to ${planId}`);
         }
         break;
       }
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object;
-        this.logger.log(`Subscription updated: ${subscription.id}`);
-        break;
-      }
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
-        const tenantId = subscription.metadata?.tenantId;
+        let tenantId = subscription.metadata?.tenantId;
+        if (!tenantId && subscription.id) {
+          const matched = await this.prisma.tenant.findFirst({
+            where: { stripeSubscriptionId: subscription.id },
+            select: { id: true },
+          });
+          tenantId = matched?.id;
+        }
         if (tenantId) {
-          await this.upgradePlan(tenantId, 'FREE' as Plan);
+          await this.upgradePlan(tenantId, Plan.FREE, undefined, null);
           this.logger.log(`Tenant ${tenantId} downgraded to FREE (subscription cancelled)`);
         }
         break;
@@ -232,7 +260,12 @@ export class BillingService {
     return { received: true };
   }
 
-  private async upgradePlan(tenantId: string, plan: Plan) {
+  private async upgradePlan(
+    tenantId: string,
+    plan: Plan,
+    stripeCustomerId?: string,
+    stripeSubscriptionId?: string | null,
+  ) {
     const planConfig = PLANS[plan] || PLANS.FREE;
     const limits = planConfig.limits;
 
@@ -240,11 +273,13 @@ export class BillingService {
       where: { id: tenantId },
       data: {
         plan,
-        maxBookmarks: limits.maxBookmarks === -1 ? 999999 : limits.maxBookmarks,
-        maxMembers: limits.maxMembers === -1 ? 999999 : limits.maxMembers,
+        maxBookmarks: limits.maxBookmarks,
+        maxMembers: limits.maxMembers,
+        ...(stripeCustomerId !== undefined && { stripeCustomerId }),
+        ...(stripeSubscriptionId !== undefined && { stripeSubscriptionId }),
       },
     });
 
-    return { success: true, plan, limits };
+    return { success: true, mode: this.stripe ? 'stripe' : 'mock', plan, limits };
   }
 }

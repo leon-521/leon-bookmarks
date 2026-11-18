@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseBookmarkHtml, ParsedFolder, ParsedBookmark } from './bookmark-parser';
+import { getDefaultFaviconUrl } from '../../common/utils/url.util';
 
 interface ImportOptions {
   createCategories: boolean;
@@ -15,9 +16,41 @@ export interface ImportResult {
   errors: string[];
 }
 
+const SKIP_BROWSER_ROOT_FOLDERS = new Set([
+  'bookmarks bar',
+  'other bookmarks',
+  'mobile bookmarks',
+  '书签栏',
+  '其他书签',
+  '移动设备书签',
+]);
+
 @Injectable()
 export class ImportService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async getQuotaContext(tenantId: string) {
+    const [tenant, existingBookmarks] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { maxBookmarks: true },
+      }),
+      this.prisma.bookmark.findMany({
+        where: { tenantId },
+        select: { url: true },
+      }),
+    ]);
+
+    const maxBookmarks = tenant?.maxBookmarks ?? 500;
+    const remainingQuota =
+      maxBookmarks > 0 ? Math.max(0, maxBookmarks - existingBookmarks.length) : Infinity;
+
+    return {
+      maxBookmarks,
+      remainingQuota,
+      existingUrls: new Set(existingBookmarks.map((b) => b.url)),
+    };
+  }
 
   async importFromHtml(
     tenantId: string,
@@ -31,6 +64,16 @@ export class ImportService {
       throw new BadRequestException('No bookmarks found in the uploaded file');
     }
 
+    if (options.defaultCategoryId) {
+      const cat = await this.prisma.category.findFirst({
+        where: { id: options.defaultCategoryId, tenantId },
+        select: { id: true },
+      });
+      if (!cat) {
+        throw new BadRequestException('Default category does not exist in this workspace');
+      }
+    }
+
     const result: ImportResult = {
       importedBookmarks: 0,
       importedCategories: 0,
@@ -38,152 +81,88 @@ export class ImportService {
       errors: [],
     };
 
-    // Get existing bookmark URLs to check duplicates
-    const existingBookmarks = await this.prisma.bookmark.findMany({
-      where: { tenantId },
-      select: { url: true },
-    });
-    const existingUrls = new Set(existingBookmarks.map(b => b.url));
+    const quota = await this.getQuotaContext(tenantId);
+    const assignedBookmarks = new Set<ParsedBookmark>();
 
-    // Process folders as categories
-    const categoryMap = new Map<string, string>(); // folder name -> category id
-
-    if (options.createCategories && parsed.folders.length > 0) {
-      for (const folder of parsed.folders) {
-        await this.createCategoryFromFolder(
-          tenantId,
-          folder,
-          null,
-          categoryMap,
-          result,
-        );
+    const insertBookmark = async (bm: ParsedBookmark, categoryId?: string | null) => {
+      if (!bm.url.startsWith('http://') && !bm.url.startsWith('https://')) {
+        return;
       }
-    }
+      if (options.skipDuplicates && quota.existingUrls.has(bm.url)) {
+        result.skippedDuplicates++;
+        return;
+      }
+      if (result.importedBookmarks >= quota.remainingQuota) {
+        if (!result.errors.some((e) => e.includes('Bookmark limit reached'))) {
+          result.errors.push(`Bookmark limit reached (${quota.maxBookmarks}). Remaining items were skipped.`);
+        }
+        return;
+      }
 
-    // Import all bookmarks
-    for (const bookmark of parsed.bookmarks) {
       try {
-        // Skip duplicates
-        if (options.skipDuplicates && existingUrls.has(bookmark.url)) {
-          result.skippedDuplicates++;
-          continue;
-        }
-
-        // Skip non-http URLs
-        if (!bookmark.url.startsWith('http://') && !bookmark.url.startsWith('https://')) {
-          continue;
-        }
-
-        // Find category for this bookmark
-        let categoryId: string | undefined = options.defaultCategoryId;
-        // Look up folder-based category
-        const parentFolder = this.findParentFolder(parsed.folders, bookmark);
-        if (parentFolder && categoryMap.has(parentFolder.name)) {
-          categoryId = categoryMap.get(parentFolder.name);
-        }
-
-        // Generate favicon URL
-        let faviconUrl: string | undefined;
-        if (bookmark.icon && bookmark.icon.startsWith('data:')) {
-          // Skip data URIs (too large to store)
-          try {
-            const url = new URL(bookmark.url);
-            faviconUrl = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
-          } catch {}
-        } else {
-          try {
-            const url = new URL(bookmark.url);
-            faviconUrl = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
-          } catch {}
-        }
-
         await this.prisma.bookmark.create({
           data: {
             tenantId,
             createdById: userId,
-            title: bookmark.title || bookmark.url,
-            url: bookmark.url,
-            categoryId,
-            faviconUrl,
+            title: bm.title || bm.url,
+            url: bm.url,
+            categoryId: categoryId || options.defaultCategoryId || null,
+            faviconUrl: getDefaultFaviconUrl(bm.url),
             tags: [],
             status: 'ACTIVE',
           },
         });
-
         result.importedBookmarks++;
-        existingUrls.add(bookmark.url);
+        quota.existingUrls.add(bm.url);
       } catch (error: any) {
-        result.errors.push(`Failed to import "${bookmark.title}": ${error.message}`);
+        result.errors.push(`Failed to import "${bm.title}": ${error.message}`);
+      }
+    };
+
+    const traverseFolder = async (folder: ParsedFolder, parentId: string | null) => {
+      let currentCategoryId = parentId;
+
+      if (options.createCategories && !SKIP_BROWSER_ROOT_FOLDERS.has(folder.name.trim().toLowerCase())) {
+        let category = await this.prisma.category.findFirst({
+          where: { tenantId, name: folder.name, parentId },
+        });
+        if (!category) {
+          category = await this.prisma.category.create({
+            data: {
+              tenantId,
+              name: folder.name,
+              parentId,
+              sortOrder: result.importedCategories,
+            },
+          });
+          result.importedCategories++;
+        }
+        currentCategoryId = category.id;
+      }
+
+      for (const child of folder.children) {
+        if ('children' in child) {
+          await traverseFolder(child as ParsedFolder, currentCategoryId);
+        } else {
+          const bm = child as ParsedBookmark;
+          assignedBookmarks.add(bm);
+          await insertBookmark(bm, currentCategoryId);
+        }
+      }
+    };
+
+    for (const folder of parsed.folders) {
+      await traverseFolder(folder, null);
+    }
+
+    // Import any top-level bookmarks that were not inside a folder
+    for (const bm of parsed.bookmarks) {
+      if (!assignedBookmarks.has(bm)) {
+        await insertBookmark(bm, options.defaultCategoryId || null);
       }
     }
 
     return result;
-  }
-
-  private async createCategoryFromFolder(
-    tenantId: string,
-    folder: ParsedFolder,
-    parentId: string | null,
-    categoryMap: Map<string, string>,
-    result: ImportResult,
-  ): Promise<void> {
-    // Skip common browser default folders
-    const skipFolders = ['Bookmarks bar', 'Bookmarks Bar', 'Other bookmarks', 'Other Bookmarks', 'Mobile bookmarks'];
-
-    let currentParentId = parentId;
-
-    if (!skipFolders.includes(folder.name)) {
-      // Check if category already exists
-      let category = await this.prisma.category.findFirst({
-        where: { tenantId, name: folder.name, parentId },
-      });
-
-      if (!category) {
-        category = await this.prisma.category.create({
-          data: {
-            tenantId,
-            name: folder.name,
-            parentId,
-            sortOrder: result.importedCategories,
-          },
-        });
-        result.importedCategories++;
-      }
-
-      categoryMap.set(folder.name, category.id);
-      currentParentId = category.id;
-    }
-
-    // Process nested folders
-    for (const child of folder.children) {
-      if ('children' in child) {
-        await this.createCategoryFromFolder(
-          tenantId,
-          child as ParsedFolder,
-          currentParentId,
-          categoryMap,
-          result,
-        );
-      }
-    }
-  }
-
-  private findParentFolder(
-    folders: ParsedFolder[],
-    bookmark: ParsedBookmark,
-  ): ParsedFolder | null {
-    for (const folder of folders) {
-      for (const child of folder.children) {
-        if (!('children' in child) && (child as ParsedBookmark).url === bookmark.url) {
-          return folder;
-        }
-      }
-      // Check nested
-      const nestedFolders = folder.children.filter(c => 'children' in c) as ParsedFolder[];
-      const found = this.findParentFolder(nestedFolders, bookmark);
-      if (found) return found;
-    }
-    return null;
   }
 
   async importFromJson(
@@ -200,53 +179,50 @@ export class ImportService {
 
     let data: any[];
     try {
-      data = JSON.parse(jsonContent);
-      if (!Array.isArray(data)) {
-        data = [data];
-      }
+      const parsed = JSON.parse(jsonContent);
+      data = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.bookmarks) ? parsed.bookmarks : [parsed];
     } catch {
       throw new BadRequestException('Invalid JSON format');
     }
 
-    const existingBookmarks = await this.prisma.bookmark.findMany({
-      where: { tenantId },
-      select: { url: true },
-    });
-    const existingUrls = new Set(existingBookmarks.map(b => b.url));
+    const quota = await this.getQuotaContext(tenantId);
 
     for (const item of data) {
       try {
-        const url = item.url || item.href || item.link;
-        const title = item.title || item.name || url;
+        const url = item?.url || item?.href || item?.link;
+        const title = item?.title || item?.name || url;
 
-        if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) continue;
+        if (!url || typeof url !== 'string' || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+          continue;
+        }
 
-        if (existingUrls.has(url)) {
+        if (quota.existingUrls.has(url)) {
           result.skippedDuplicates++;
           continue;
         }
 
-        let faviconUrl: string | undefined;
-        try {
-          const parsedUrl = new URL(url);
-          faviconUrl = `https://www.google.com/s2/favicons?domain=${parsedUrl.hostname}&sz=32`;
-        } catch {}
+        if (result.importedBookmarks >= quota.remainingQuota) {
+          if (!result.errors.some((e) => e.includes('Bookmark limit reached'))) {
+            result.errors.push(`Bookmark limit reached (${quota.maxBookmarks}). Remaining items were skipped.`);
+          }
+          break;
+        }
 
         await this.prisma.bookmark.create({
           data: {
             tenantId,
             createdById: userId,
-            title,
+            title: String(title).trim() || url,
             url,
             description: item.description || item.desc || null,
-            tags: item.tags || [],
-            faviconUrl,
+            tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
+            faviconUrl: getDefaultFaviconUrl(url),
             status: 'ACTIVE',
           },
         });
 
         result.importedBookmarks++;
-        existingUrls.add(url);
+        quota.existingUrls.add(url);
       } catch (error: any) {
         result.errors.push(`Failed: ${error.message}`);
       }
@@ -308,7 +284,6 @@ export class ImportService {
       };
     }
 
-    // Netscape Bookmark HTML format (Chrome / Firefox / Edge compatible)
     const escHtml = (s: string) =>
       (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

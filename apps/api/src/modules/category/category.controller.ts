@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ArrayNotEmpty, IsArray, IsString } from 'class-validator';
 import { Role } from '@prisma/client';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -17,6 +18,13 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+class ReorderCategoriesDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  orderedIds: string[];
+}
 
 @ApiTags('categories')
 @ApiBearerAuth()
@@ -71,7 +79,7 @@ export class CategoryController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.EDITOR)
   @ApiOperation({ summary: 'Delete a category' })
   async remove(
     @CurrentUser('tenantId') tenantId: string,
@@ -86,8 +94,19 @@ export class CategoryController {
   @ApiOperation({ summary: 'Reorder categories' })
   async reorder(
     @CurrentUser('tenantId') tenantId: string,
-    @Body('orderedIds') orderedIds: string[],
+    @Body() dto: ReorderCategoriesDto,
   ) {
-    return this.categoryService.reorder(tenantId, orderedIds);
+    return this.categoryService.reorder(tenantId, dto.orderedIds);
+  }
+
+  @Patch('reorder')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.EDITOR)
+  @ApiOperation({ summary: 'Reorder categories (PATCH alias)' })
+  async reorderPatch(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() dto: ReorderCategoriesDto,
+  ) {
+    return this.categoryService.reorder(tenantId, dto.orderedIds);
   }
 }

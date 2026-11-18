@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { billingService } from '@/lib/services';
-import type { SubscriptionInfo, PricingPlan } from '@/lib/services';
+import type { SubscriptionInfo } from '@/lib/services';
 import { cn } from '@/lib/utils';
 
 function UsageBar({ label, used, limit, percentage }: { label: string; used: number; limit: number; percentage: number }) {
-  const isUnlimited = limit === -1;
+  const isUnlimited = limit < 0 || limit >= 999999;
   const pct = isUnlimited ? 0 : Math.min(percentage, 100);
   const isHigh = pct >= 80;
   const isCritical = pct >= 95;
@@ -119,9 +119,16 @@ export default function BillingSettingsPage() {
 
   const handleUpgrade = async (planId: string) => {
     setCheckoutLoading(planId);
+    setError(null);
     try {
-      const { checkoutUrl } = await billingService.createCheckout(planId);
-      window.location.href = checkoutUrl;
+      const res: any = await billingService.createCheckout(planId);
+      if (res?.checkoutUrl) {
+        window.location.href = res.checkoutUrl;
+      } else {
+        setError(res?.message || 'Stripe is not configured. Running in mock mode.');
+        const updated = await billingService.getSubscription().catch(() => null);
+        if (updated) setSubscription(updated);
+      }
     } catch (err: any) {
       if (err.message?.includes('Stripe') || err.message?.includes('mock') || err.status === 503) {
         setError('Stripe is not configured. Running in mock mode — billing features are simulated.');
@@ -135,9 +142,14 @@ export default function BillingSettingsPage() {
 
   const handleManageSubscription = async () => {
     setPortalLoading(true);
+    setError(null);
     try {
-      const { portalUrl } = await billingService.createPortal();
-      window.location.href = portalUrl;
+      const res: any = await billingService.createPortal();
+      if (res?.portalUrl) {
+        window.location.href = res.portalUrl;
+      } else {
+        setError(res?.message || 'Stripe is not configured. Running in mock mode.');
+      }
     } catch (err: any) {
       if (err.message?.includes('Stripe') || err.message?.includes('mock') || err.status === 503) {
         setError('Stripe is not configured. Running in mock mode — billing features are simulated.');
@@ -163,6 +175,7 @@ export default function BillingSettingsPage() {
 
   const plan = subscription?.currentPlan;
   const isFree = plan?.price === 0;
+  const isPro = plan?.id === 'pro' || plan?.name?.toLowerCase() === 'pro';
 
   return (
     <div className="max-w-3xl space-y-6 animate-fade-in">
@@ -228,13 +241,13 @@ export default function BillingSettingsPage() {
       </div>
 
       {/* Upgrade/Downgrade Options */}
-      {(subscription?.canUpgrade || subscription?.canDowngrade) && (
+      {subscription?.canUpgrade && (
         <div className="rounded-xl border border-border bg-bg-primary p-6 shadow-xs">
           <h3 className="text-sm font-semibold text-text-primary mb-4">
-            {subscription.canUpgrade ? 'Upgrade your plan' : 'Available plans'}
+            Upgrade your plan
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {subscription.canUpgrade && (
+            {!isPro && (
               <button
                 onClick={() => handleUpgrade('pro')}
                 disabled={checkoutLoading === 'pro'}
@@ -249,7 +262,7 @@ export default function BillingSettingsPage() {
                   <span className="text-sm font-semibold text-text-primary">Pro</span>
                   <span className="text-xs text-text-tertiary">$9.99/mo</span>
                 </div>
-                <p className="text-xs text-text-secondary">5,000 bookmarks, 10 members, custom domain</p>
+                <p className="text-xs text-text-secondary">5,000 bookmarks, 50 members, custom domain</p>
                 <ArrowUpRight className="absolute top-4 right-4 h-4 w-4 text-accent" />
               </button>
             )}

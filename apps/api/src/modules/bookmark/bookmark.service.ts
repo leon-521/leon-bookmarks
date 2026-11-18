@@ -2,19 +2,31 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBookmarkDto } from './dto/create-bookmark.dto';
 import { UpdateBookmarkDto } from './dto/update-bookmark.dto';
 import { BookmarkFilterDto } from './dto/bookmark-filter.dto';
 import { Prisma } from '@prisma/client';
+import { getDefaultFaviconUrl } from '../../common/utils/url.util';
 
 @Injectable()
 export class BookmarkService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async ensureTenantCategory(tenantId: string, categoryId?: string | null) {
+    if (!categoryId) return;
+    const category = await this.prisma.category.findFirst({
+      where: { id: categoryId, tenantId },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new BadRequestException('Selected category does not exist in this workspace');
+    }
+  }
+
   async create(tenantId: string, userId: string, dto: CreateBookmarkDto) {
-    // Check tenant bookmark limit
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { maxBookmarks: true },
@@ -24,20 +36,15 @@ export class BookmarkService {
       where: { tenantId },
     });
 
-    if (tenant && bookmarkCount >= tenant.maxBookmarks) {
+    if (tenant && tenant.maxBookmarks > 0 && bookmarkCount >= tenant.maxBookmarks) {
       throw new ForbiddenException(
         `Bookmark limit reached (${tenant.maxBookmarks}). Upgrade your plan for more.`,
       );
     }
 
-    // Auto-generate a favicon URL stub from the bookmark URL
-    let faviconUrl: string | undefined;
-    try {
-      const url = new URL(dto.url);
-      faviconUrl = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
-    } catch {
-      // Invalid URL — skip favicon
-    }
+    await this.ensureTenantCategory(tenantId, dto.categoryId);
+
+    const faviconUrl = getDefaultFaviconUrl(dto.url);
 
     return this.prisma.bookmark.create({
       data: {
@@ -46,7 +53,7 @@ export class BookmarkService {
         title: dto.title,
         url: dto.url,
         description: dto.description,
-        categoryId: dto.categoryId,
+        categoryId: dto.categoryId || null,
         tags: dto.tags || [],
         sortOrder: dto.sortOrder ?? 0,
         isPinned: dto.isPinned ?? false,
@@ -100,7 +107,6 @@ export class BookmarkService {
       where.isPinned = isPinned;
     }
 
-    // Build orderBy — allow sorting by known fields only
     const allowedSortFields = [
       'createdAt',
       'updatedAt',
@@ -111,8 +117,9 @@ export class BookmarkService {
     const orderByField = allowedSortFields.includes(sortBy)
       ? sortBy
       : 'createdAt';
+    const safeSortOrder: 'asc' | 'desc' = sortOrder === 'asc' ? 'asc' : 'desc';
     const orderBy: Prisma.BookmarkOrderByWithRelationInput = {
-      [orderByField]: sortOrder,
+      [orderByField]: safeSortOrder,
     };
 
     const skip = (page - 1) * limit;
@@ -167,9 +174,21 @@ export class BookmarkService {
       throw new NotFoundException('Bookmark not found');
     }
 
+    if (dto.categoryId !== undefined) {
+      await this.ensureTenantCategory(tenantId, dto.categoryId);
+    }
+
+    const faviconUrl =
+      dto.url && dto.url !== bookmark.url
+        ? getDefaultFaviconUrl(dto.url)
+        : undefined;
+
     return this.prisma.bookmark.update({
       where: { id },
-      data: dto,
+      data: {
+        ...dto,
+        ...(faviconUrl !== undefined && { faviconUrl }),
+      },
       include: {
         category: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true, email: true } },
@@ -191,6 +210,10 @@ export class BookmarkService {
   }
 
   async batchDelete(tenantId: string, ids: string[]) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('No bookmark IDs provided');
+    }
+
     const result = await this.prisma.bookmark.deleteMany({
       where: {
         id: { in: ids },
@@ -202,6 +225,12 @@ export class BookmarkService {
   }
 
   async batchMove(tenantId: string, ids: string[], categoryId: string | null) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('No bookmark IDs provided');
+    }
+
+    await this.ensureTenantCategory(tenantId, categoryId);
+
     const result = await this.prisma.bookmark.updateMany({
       where: {
         id: { in: ids },

@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { GripVertical, ChevronRight, ChevronDown, FolderTree, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookmarkGrid } from '@/components/bookmark/bookmark-grid';
@@ -22,12 +22,14 @@ interface Category {
 }
 
 export default function CategoriesPage() {
+  const queryClient = useQueryClient();
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
   const [bookmarks, setBookmarks] = React.useState<any[]>([]);
   const [bookmarksLoading, setBookmarksLoading] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
 
   // Create / Edit state
   const [isCreating, setIsCreating] = React.useState(false);
@@ -47,32 +49,34 @@ export default function CategoriesPage() {
       const res = await api.get<any>('/categories/tree');
       const data = res.data || res;
       setCategories(Array.isArray(data) ? data : []);
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch {
       setCategories([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryClient]);
 
   React.useEffect(() => { fetchCategories(); }, [fetchCategories]);
 
   // Fetch bookmarks for selected category
+  const fetchCategoryBookmarks = React.useCallback(async (catId: string) => {
+    setBookmarksLoading(true);
+    try {
+      const res = await api.get<any>('/bookmarks', { params: { categoryId: catId, limit: '50' } });
+      const data = res.data || res;
+      setBookmarks(Array.isArray(data) ? data : data?.data || []);
+    } catch {
+      setBookmarks([]);
+    } finally {
+      setBookmarksLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (!selectedId) { setBookmarks([]); return; }
-    const fetchBookmarks = async () => {
-      setBookmarksLoading(true);
-      try {
-        const res = await api.get<any>('/bookmarks', { params: { categoryId: selectedId, limit: '50' } });
-        const data = res.data || res;
-        setBookmarks(Array.isArray(data) ? data : data?.data || []);
-      } catch {
-        setBookmarks([]);
-      } finally {
-        setBookmarksLoading(false);
-      }
-    };
-    fetchBookmarks();
-  }, [selectedId]);
+    fetchCategoryBookmarks(selectedId);
+  }, [selectedId, fetchCategoryBookmarks]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -85,33 +89,64 @@ export default function CategoriesPage() {
   // Create category
   const handleCreate = async () => {
     if (!newName.trim()) return;
+    setActionError(null);
     try {
       await api.post('/categories', { name: newName.trim(), parentId: createParentId || undefined });
       setNewName('');
       setIsCreating(false);
       setCreateParentId(null);
       fetchCategories();
-    } catch {}
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to create category');
+    }
   };
 
   // Update category name
   const handleUpdate = async (id: string) => {
     if (!editingName.trim()) return;
+    setActionError(null);
     try {
       await api.patch(`/categories/${id}`, { name: editingName.trim() });
       setEditingId(null);
       fetchCategories();
-    } catch {}
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to rename category');
+    }
   };
 
   // Delete category
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this category? Bookmarks will be uncategorized.')) return;
+    setActionError(null);
     try {
       await api.delete(`/categories/${id}`);
       if (selectedId === id) setSelectedId(null);
       fetchCategories();
-    } catch {}
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to delete category');
+    }
+  };
+
+  const handleBookmarkPin = async (bookmark: any) => {
+    try {
+      await api.patch(`/bookmarks/${bookmark.id}`, { isPinned: !bookmark.isPinned });
+      if (selectedId) fetchCategoryBookmarks(selectedId);
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to update bookmark');
+    }
+  };
+
+  const handleBookmarkDelete = async (bookmark: any) => {
+    if (!confirm(`Delete bookmark "${bookmark.title}"?`)) return;
+    try {
+      await api.delete(`/bookmarks/${bookmark.id}`);
+      if (selectedId) fetchCategoryBookmarks(selectedId);
+      fetchCategories();
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to delete bookmark');
+    }
   };
 
   // Drag and drop reorder
@@ -122,7 +157,6 @@ export default function CategoriesPage() {
   };
   const handleDrop = async (targetId: string) => {
     if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return; }
-    // Simple reorder: collect flat category IDs, move dragId before targetId
     const flatIds = flattenCategoryIds(categories);
     const fromIdx = flatIds.indexOf(dragId);
     const toIdx = flatIds.indexOf(targetId);
@@ -134,7 +168,9 @@ export default function CategoriesPage() {
     try {
       await api.post('/categories/reorder', { orderedIds: flatIds });
       fetchCategories();
-    } catch {}
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to reorder categories');
+    }
   };
 
   const flattenCategoryIds = (cats: Category[]): string[] => {
@@ -151,10 +187,16 @@ export default function CategoriesPage() {
   return (
     <div className="max-w-7xl mx-auto">
       <PageHeader title="Categories" description="Organize your bookmarks with categories and subcategories.">
-        <Button onClick={() => { setIsCreating(true); setCreateParentId(null); }} className="gap-2">
+        <Button onClick={() => { setActionError(null); setIsCreating(true); setCreateParentId(null); }} className="gap-2">
           <Plus className="h-4 w-4" /> Add Category
         </Button>
       </PageHeader>
+
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-danger/20 bg-danger-light px-4 py-3 text-sm text-danger">
+          {actionError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Category Tree */}
@@ -235,7 +277,11 @@ export default function CategoriesPage() {
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                 </div>
               ) : (
-                <BookmarkGrid bookmarks={bookmarks} />
+                <BookmarkGrid
+                  bookmarks={bookmarks}
+                  onPin={handleBookmarkPin}
+                  onDelete={handleBookmarkDelete}
+                />
               )}
             </>
           ) : (

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Brain, Plus, Trash2, Star, StarOff, Power, PowerOff, TestTube, Pencil, Check, X, Loader2, ExternalLink } from 'lucide-react';
+import { Brain, Plus, Trash2, Star, StarOff, Power, PowerOff, TestTube, Pencil, Check, X, Loader2 } from 'lucide-react';
 import { adminService } from '@/lib/services/admin.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,7 @@ export default function AiProvidersPage() {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [testResults, setTestResults] = React.useState<Record<string, TestResult>>({});
+  const [error, setError] = React.useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = React.useState({
@@ -51,8 +52,8 @@ export default function AiProvidersPage() {
     try {
       const res = await adminService.listAiProviders();
       setProviders(Array.isArray(res) ? res : res?.data || []);
-    } catch (err) {
-      console.error('Failed to fetch AI providers:', err);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load AI providers');
     } finally {
       setLoading(false);
     }
@@ -69,6 +70,7 @@ export default function AiProvidersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setActionLoading('form');
+    setError(null);
     try {
       if (editingId) {
         const { apiKey, ...rest } = formData;
@@ -78,14 +80,15 @@ export default function AiProvidersPage() {
       }
       resetForm();
       await fetchProviders();
-    } catch (err) {
-      console.error('Failed to save AI provider:', err);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save AI provider');
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleEdit = (provider: AiProvider) => {
+    setError(null);
     setFormData({
       name: provider.name,
       baseUrl: provider.baseUrl,
@@ -100,9 +103,12 @@ export default function AiProvidersPage() {
 
   const handleSetDefault = async (id: string) => {
     setActionLoading(id);
+    setError(null);
     try {
       await adminService.setDefaultAiProvider(id);
       await fetchProviders();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to set default AI provider');
     } finally {
       setActionLoading(null);
     }
@@ -110,9 +116,12 @@ export default function AiProvidersPage() {
 
   const handleToggleActive = async (provider: AiProvider) => {
     setActionLoading(provider.id);
+    setError(null);
     try {
       await adminService.updateAiProvider(provider.id, { isActive: !provider.isActive });
       await fetchProviders();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update AI provider status');
     } finally {
       setActionLoading(null);
     }
@@ -121,9 +130,12 @@ export default function AiProvidersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this AI provider?')) return;
     setActionLoading(id);
+    setError(null);
     try {
       await adminService.deleteAiProvider(id);
       await fetchProviders();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete AI provider');
     } finally {
       setActionLoading(null);
     }
@@ -165,12 +177,18 @@ export default function AiProvidersPage() {
           </p>
         </div>
         {!showForm && (
-          <Button onClick={() => { resetForm(); setShowForm(true); }} className="gap-2">
+          <Button onClick={() => { setError(null); resetForm(); setShowForm(true); }} className="gap-2">
             <Plus className="h-4 w-4" />
             Add Provider
           </Button>
         )}
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-danger/20 bg-danger-light px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      )}
 
       {/* Add/Edit Form */}
       {showForm && (

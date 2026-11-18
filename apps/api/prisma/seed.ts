@@ -11,6 +11,7 @@ async function main() {
   await prisma.category.deleteMany();
   await prisma.user.deleteMany();
   await prisma.tenant.deleteMany();
+  await prisma.aiProvider.deleteMany();
 
   // ═══════════════════════════════════════════════
   // Tenant 1: Acme Dev Team
@@ -119,7 +120,7 @@ async function main() {
     let faviconUrl: string | undefined;
     try {
       const url = new URL(bm.url);
-      faviconUrl = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+      faviconUrl = `${url.origin}/favicon.ico`;
     } catch {}
 
     await prisma.bookmark.create({
@@ -198,7 +199,7 @@ async function main() {
     let faviconUrl: string | undefined;
     try {
       const url = new URL(bm.url);
-      faviconUrl = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+      faviconUrl = `${url.origin}/favicon.ico`;
     } catch {}
 
     await prisma.bookmark.create({

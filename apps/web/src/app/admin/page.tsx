@@ -20,19 +20,21 @@ interface TenantRow {
   name: string;
   slug: string;
   plan: string;
-  bookmarkCount: number;
-  memberCount: number;
+  _count?: {
+    bookmarks: number;
+    users: number;
+  };
 }
 
 interface AnalyticsData {
-  stats: {
+  overview: {
     totalTenants: number;
     activeTenants: number;
     frozenTenants: number;
     totalUsers: number;
     totalBookmarks: number;
     totalCategories: number;
-    newTenantsLast30Days: number;
+    recentTenants: number;
   };
   planDistribution: { plan: string; count: number }[];
   topTenants: TenantRow[];
@@ -106,14 +108,15 @@ export default function AdminDashboardPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const statCards: StatCard[] = data ? [
-    { label: 'Total Tenants', value: data.stats.totalTenants, icon: Building2, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-    { label: 'Active', value: data.stats.activeTenants, icon: Shield, color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
-    { label: 'Frozen', value: data.stats.frozenTenants, icon: Snowflake, color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
-    { label: 'Users', value: data.stats.totalUsers, icon: Users, color: 'text-violet-600', bgColor: 'bg-violet-50' },
-    { label: 'Bookmarks', value: data.stats.totalBookmarks, icon: Bookmark, color: 'text-amber-600', bgColor: 'bg-amber-50' },
-    { label: 'Categories', value: data.stats.totalCategories, icon: FolderTree, color: 'text-rose-600', bgColor: 'bg-rose-50' },
-    { label: 'New (30d)', value: data.stats.newTenantsLast30Days, icon: TrendingUp, color: 'text-teal-600', bgColor: 'bg-teal-50' },
+  const ov = data?.overview;
+  const statCards: StatCard[] = ov ? [
+    { label: 'Total Tenants', value: ov.totalTenants ?? 0, icon: Building2, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+    { label: 'Active', value: ov.activeTenants ?? 0, icon: Shield, color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
+    { label: 'Frozen', value: ov.frozenTenants ?? 0, icon: Snowflake, color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
+    { label: 'Users', value: ov.totalUsers ?? 0, icon: Users, color: 'text-violet-600', bgColor: 'bg-violet-50' },
+    { label: 'Bookmarks', value: ov.totalBookmarks ?? 0, icon: Bookmark, color: 'text-amber-600', bgColor: 'bg-amber-50' },
+    { label: 'Categories', value: ov.totalCategories ?? 0, icon: FolderTree, color: 'text-rose-600', bgColor: 'bg-rose-50' },
+    { label: 'New (30d)', value: ov.recentTenants ?? 0, icon: TrendingUp, color: 'text-teal-600', bgColor: 'bg-teal-50' },
   ] : [];
 
   if (error) {
@@ -200,8 +203,12 @@ export default function AdminDashboardPage() {
                     <td className="px-5 py-3.5">
                       <Badge variant={planBadgeVariant(tenant.plan)}>{tenant.plan}</Badge>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right">{tenant.bookmarkCount.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right">{tenant.memberCount}</td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right">
+                      {(tenant._count?.bookmarks ?? 0).toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-text-secondary text-right">
+                      {tenant._count?.users ?? 0}
+                    </td>
                   </tr>
                 ))}
                 {data.topTenants.length === 0 && (

@@ -33,6 +33,18 @@ export default function BookmarksPage() {
   const [page, setPage] = React.useState(1);
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingBookmark, setEditingBookmark] = React.useState<any | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+
+  // Sync ?search=... query parameter from global Topbar search
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('search');
+    if (q !== null) {
+      setSearch(q);
+      setPage(1);
+    }
+  }, []);
 
   const { data: categories } = useCategories();
   const createBookmark = useCreateBookmark();
@@ -50,7 +62,7 @@ export default function BookmarksPage() {
         : sortBy === 'oldest'
         ? 'createdAt'
         : undefined,
-    sortOrder: sortBy === 'oldest' ? 'asc' : 'desc',
+    sortOrder: sortBy === 'oldest' || sortBy === 'title' ? 'asc' : 'desc',
     page,
     limit: 20,
   });
@@ -62,20 +74,31 @@ export default function BookmarksPage() {
   const categoryList = Array.isArray(categories) ? categories : [];
 
   const handleEdit = (bookmark: any) => {
+    setActionError(null);
     setEditingBookmark(bookmark);
     setFormOpen(true);
   };
 
   const handleDelete = async (bookmark: any) => {
     if (!confirm(`Delete bookmark "${bookmark.title}"?`)) return;
-    await deleteBookmark.mutateAsync(bookmark.id);
+    setActionError(null);
+    try {
+      await deleteBookmark.mutateAsync(bookmark.id);
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to delete bookmark');
+    }
   };
 
   const handlePin = async (bookmark: any) => {
-    await updateBookmark.mutateAsync({
-      id: bookmark.id,
-      isPinned: !bookmark.isPinned,
-    });
+    setActionError(null);
+    try {
+      await updateBookmark.mutateAsync({
+        id: bookmark.id,
+        isPinned: !bookmark.isPinned,
+      });
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to update bookmark');
+    }
   };
 
   const handleFormSubmit = async (formData: {
@@ -85,26 +108,31 @@ export default function BookmarksPage() {
     categoryId?: string;
     tags: string[];
   }) => {
-    if (editingBookmark) {
-      await updateBookmark.mutateAsync({
-        id: editingBookmark.id,
-        url: formData.url,
-        title: formData.title,
-        description: formData.description,
-        categoryId: formData.categoryId || null,
-        tags: formData.tags,
-      });
-    } else {
-      await createBookmark.mutateAsync({
-        url: formData.url,
-        title: formData.title,
-        description: formData.description,
-        categoryId: formData.categoryId,
-        tags: formData.tags,
-      });
+    setActionError(null);
+    try {
+      if (editingBookmark) {
+        await updateBookmark.mutateAsync({
+          id: editingBookmark.id,
+          url: formData.url,
+          title: formData.title,
+          description: formData.description,
+          categoryId: formData.categoryId || null,
+          tags: formData.tags,
+        });
+      } else {
+        await createBookmark.mutateAsync({
+          url: formData.url,
+          title: formData.title,
+          description: formData.description,
+          categoryId: formData.categoryId,
+          tags: formData.tags,
+        });
+      }
+      setFormOpen(false);
+      setEditingBookmark(null);
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to save bookmark');
     }
-    setFormOpen(false);
-    setEditingBookmark(null);
   };
 
   const handleFormClose = (open: boolean) => {
@@ -125,12 +153,18 @@ export default function BookmarksPage() {
               AI Organize
             </Button>
           </Link>
-          <Button onClick={() => setFormOpen(true)} className="gap-2">
+          <Button onClick={() => { setActionError(null); setFormOpen(true); }} className="gap-2">
             <Plus className="h-4 w-4" />
             Add Bookmark
           </Button>
         </div>
       </PageHeader>
+
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-danger/20 bg-danger-light px-4 py-3 text-sm text-danger">
+          {actionError}
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

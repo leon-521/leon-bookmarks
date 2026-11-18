@@ -49,7 +49,7 @@ export class TenantService {
       },
     });
 
-    if (!tenant) {
+    if (!tenant || !tenant.isActive) {
       throw new NotFoundException('Tenant not found');
     }
 
@@ -69,9 +69,19 @@ export class TenantService {
       throw new NotFoundException('Tenant not found');
     }
 
+    const normalizedDomain =
+      dto.customDomain !== undefined
+        ? dto.customDomain.trim() || null
+        : undefined;
+
     return this.prisma.tenant.update({
       where: { id: tenantId },
-      data: dto,
+      data: {
+        ...(dto.name !== undefined && { name: dto.name.trim() }),
+        ...(dto.logo !== undefined && { logo: dto.logo.trim() || null }),
+        ...(dto.favicon !== undefined && { favicon: dto.favicon.trim() || null }),
+        ...(normalizedDomain !== undefined && { customDomain: normalizedDomain }),
+      },
     });
   }
 
@@ -147,16 +157,18 @@ export class TenantService {
       );
     }
 
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId, email: dto.email.toLowerCase().trim() } },
+      where: { tenantId_email: { tenantId, email: normalizedEmail } },
     });
     if (existing) {
       throw new ConflictException('A member with this email already exists in this workspace');
     }
 
+    const normalizedRole = dto.role ? (String(dto.role).toUpperCase() as Role) : undefined;
     const assignedRole =
-      dto.role && ([Role.ADMIN, Role.EDITOR, Role.VIEWER] as Role[]).includes(dto.role)
-        ? dto.role
+      normalizedRole && ([Role.ADMIN, Role.EDITOR, Role.VIEWER] as Role[]).includes(normalizedRole)
+        ? normalizedRole
         : Role.EDITOR;
 
     const rawPassword = dto.password || 'Welcome123!';
@@ -165,7 +177,7 @@ export class TenantService {
     return this.prisma.user.create({
       data: {
         tenantId,
-        email: dto.email.toLowerCase().trim(),
+        email: normalizedEmail,
         name: dto.name.trim(),
         password: hashedPassword,
         role: assignedRole,
@@ -180,18 +192,29 @@ export class TenantService {
     });
   }
 
-  async updateMemberRole(tenantId: string, requesterId: string, memberId: string, role: Role) {
+  async updateMemberRole(
+    tenantId: string,
+    requesterId: string,
+    requesterRole: Role,
+    memberId: string,
+    roleInput: Role,
+  ) {
+    const role = String(roleInput || '').toUpperCase() as Role;
     if (!([Role.ADMIN, Role.EDITOR, Role.VIEWER] as Role[]).includes(role)) {
       throw new BadRequestException('Invalid workspace role');
     }
-    if (requesterId === memberId && role !== Role.ADMIN) {
-      throw new BadRequestException('You cannot downgrade your own admin role');
+    if (requesterId === memberId) {
+      throw new BadRequestException('You cannot modify your own role');
     }
 
     const member = await this.prisma.user.findFirst({
       where: { id: memberId, tenantId },
     });
     if (!member) throw new NotFoundException('Member not found');
+
+    if (member.role === Role.SUPER_ADMIN && requesterRole !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Cannot modify a Super Admin account');
+    }
 
     return this.prisma.user.update({
       where: { id: memberId },
@@ -200,7 +223,12 @@ export class TenantService {
     });
   }
 
-  async removeMember(tenantId: string, requesterId: string, memberId: string) {
+  async removeMember(
+    tenantId: string,
+    requesterId: string,
+    requesterRole: Role,
+    memberId: string,
+  ) {
     if (requesterId === memberId) {
       throw new BadRequestException('You cannot remove yourself from the workspace');
     }
@@ -209,6 +237,10 @@ export class TenantService {
       where: { id: memberId, tenantId },
     });
     if (!member) throw new NotFoundException('Member not found');
+
+    if (member.role === Role.SUPER_ADMIN && requesterRole !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Cannot remove a Super Admin account');
+    }
 
     await this.prisma.user.delete({ where: { id: memberId } });
     return { deleted: true };

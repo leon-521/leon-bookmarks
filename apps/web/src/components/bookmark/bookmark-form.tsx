@@ -90,8 +90,23 @@ export function BookmarkForm({
       setTags(defaultValues?.tags || []);
       setTagInput('');
       setAiHint(null);
+      setFaviconUrl(null);
     }
   }, [open, reset, defaultValues]);
+
+  const previewFaviconSrc = React.useMemo(() => {
+    if (faviconUrl) return faviconUrl;
+    if (!url) return '';
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return `${parsed.origin}/favicon.ico`;
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  }, [faviconUrl, url]);
 
   const fetchMeta = async (targetUrl: string) => {
     if (!targetUrl) return;
@@ -306,9 +321,9 @@ export function BookmarkForm({
             {/* AI Smart Assist Bar */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <div className="flex items-center gap-2">
-                {url && !errors.url && (
+                {previewFaviconSrc && !errors.url && (
                   <img
-                    src={faviconUrl || `https://www.google.com/s2/favicons?domain=${url}&sz=16`}
+                    src={previewFaviconSrc}
                     alt=""
                     className="h-4 w-4 rounded-sm"
                     onError={(e) => {

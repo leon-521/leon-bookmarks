@@ -20,6 +20,7 @@ export interface UpdateTenantData {
   name?: string;
   logo?: string;
   favicon?: string;
+  customDomain?: string;
 }
 
 export interface UpdateThemeData {
@@ -55,7 +56,8 @@ export const tenantService = {
   getOne: (id: string) => api.get<Tenant>(`/tenants/${id}`),
   getBySlug: (slug: string) => api.get<Tenant>(`/tenants/slug/${slug}`),
   update: (id: string, data: UpdateTenantData) => api.patch<Tenant>(`/tenants/${id}`, data),
-  updateTheme: (id: string, data: UpdateThemeData) => api.patch<Tenant>(`/tenants/${id}/theme`, data),
+  updateTheme: (id: string, data: UpdateThemeData) =>
+    api.patch<Tenant>(`/tenants/${id}/theme`, { themeConfig: data }),
   listMembers: () => api.get<WorkspaceMembersResponse>('/tenants/members'),
   inviteMember: (data: { email: string; name: string; role?: string; password?: string }) =>
     api.post<WorkspaceMember>('/tenants/members/invite', data),

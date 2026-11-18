@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertSafeExternalUrl } from '../../common/utils/url.util';
 
 export interface AiCategorySuggestion {
   categoryId: string | null;
@@ -68,10 +69,6 @@ export class AiService {
       });
     }
     return provider || null;
-  }
-
-  private get isAiEnabled(): Promise<boolean> {
-    return this.getProviderConfig().then(c => !!c);
   }
 
   // ═══════════════════════════════════════════
@@ -729,49 +726,65 @@ Respond in JSON format only:
       aiAlternative?: string;
     }[] = [];
 
-    for (const bm of bookmarks) {
-      const start = Date.now();
-      let healthy = false;
-      let httpStatus: number | null = null;
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < bookmarks.length; i += BATCH_SIZE) {
+      const batch = bookmarks.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (bm) => {
+          const start = Date.now();
+          let healthy = false;
+          let httpStatus: number | null = null;
 
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(bm.url, {
-          method: 'HEAD',
-          redirect: 'follow',
-          signal: controller.signal,
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeonBookmarksHealthBot/1.0)' },
-        });
-        clearTimeout(timer);
-        httpStatus = res.status;
-        healthy = res.status >= 200 && res.status < 400;
-      } catch {
-        healthy = false;
-      }
+          try {
+            const safeUrl = await assertSafeExternalUrl(bm.url);
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 5000);
+            let res = await fetch(safeUrl.toString(), {
+              method: 'HEAD',
+              redirect: 'follow',
+              signal: controller.signal,
+              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeonBookmarksHealthBot/1.0)' },
+            });
+            if (res.status === 405 || res.status === 501) {
+              res = await fetch(safeUrl.toString(), {
+                method: 'GET',
+                redirect: 'follow',
+                signal: controller.signal,
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeonBookmarksHealthBot/1.0)' },
+              });
+            }
+            clearTimeout(timer);
+            httpStatus = res.status;
+            healthy = res.status >= 200 && res.status < 400;
+          } catch {
+            healthy = false;
+          }
 
-      const latencyMs = Date.now() - start;
-      const newStatus = healthy ? 'ACTIVE' : 'BROKEN';
+          const latencyMs = Date.now() - start;
+          const newStatus = healthy ? 'ACTIVE' : 'BROKEN';
 
-      await this.prisma.bookmark.update({
-        where: { id: bm.id },
-        data: { status: newStatus, lastChecked: new Date() },
-      });
+          await this.prisma.bookmark.update({
+            where: { id: bm.id },
+            data: { status: newStatus, lastChecked: new Date() },
+          });
 
-      results.push({
-        id: bm.id,
-        title: bm.title,
-        url: bm.url,
-        healthy,
-        httpStatus,
-        latencyMs,
-        ...(healthy
-          ? {}
-          : {
-              waybackUrl: `https://web.archive.org/web/*/${bm.url}`,
-              aiAlternative: this.suggestBrokenAlternative(bm.title, bm.url),
-            }),
-      });
+          return {
+            id: bm.id,
+            title: bm.title,
+            url: bm.url,
+            healthy,
+            httpStatus,
+            latencyMs,
+            ...(healthy
+              ? {}
+              : {
+                  waybackUrl: `https://web.archive.org/web/*/${bm.url}`,
+                  aiAlternative: this.suggestBrokenAlternative(bm.title, bm.url),
+                }),
+          };
+        }),
+      );
+      results.push(...batchResults);
     }
 
     const brokenCount = results.filter((r) => !r.healthy).length;

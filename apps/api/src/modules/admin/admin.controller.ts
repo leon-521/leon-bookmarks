@@ -2,11 +2,92 @@ import {
   Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Role } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+
+class AdminUpdateTenantDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  plan?: string;
+
+  @IsNumber()
+  @IsOptional()
+  maxBookmarks?: number;
+
+  @IsNumber()
+  @IsOptional()
+  maxMembers?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+}
+
+class AdminUpdateRoleDto {
+  @IsString()
+  role: string;
+}
+
+class CreateAiProviderDto {
+  @IsString()
+  name: string;
+
+  @IsString()
+  baseUrl: string;
+
+  @IsString()
+  apiKey: string;
+
+  @IsString()
+  @IsOptional()
+  model?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+class UpdateAiProviderDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  baseUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  apiKey?: string;
+
+  @IsString()
+  @IsOptional()
+  model?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -29,15 +110,27 @@ export class AdminController {
   async listTenants(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('plan') plan?: string,
     @Query('status') status?: string,
   ) {
+    const rawLimit = limit || pageSize;
+    const parsedPage = Math.max(1, page ? parseInt(page, 10) || 1 : 1);
+    const parsedLimit = Math.min(100, Math.max(1, rawLimit ? parseInt(rawLimit, 10) || 20 : 20));
+    const normalizedStatus = status?.toLowerCase();
+
     return this.adminService.listTenants({
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
-      search, plan,
-      isActive: status === 'active' ? true : status === 'inactive' ? false : undefined,
+      page: parsedPage,
+      limit: parsedLimit,
+      search,
+      plan,
+      isActive:
+        normalizedStatus === 'active'
+          ? true
+          : normalizedStatus === 'inactive' || normalizedStatus === 'frozen'
+            ? false
+            : undefined,
     });
   }
 
@@ -49,7 +142,7 @@ export class AdminController {
 
   @Patch('tenants/:id')
   @ApiOperation({ summary: 'Update tenant (plan, limits, status)' })
-  async updateTenant(@Param('id') id: string, @Body() dto: any) {
+  async updateTenant(@Param('id') id: string, @Body() dto: AdminUpdateTenantDto) {
     return this.adminService.updateTenant(id, dto);
   }
 
@@ -77,20 +170,26 @@ export class AdminController {
   async listUsers(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('role') role?: string,
   ) {
+    const rawLimit = limit || pageSize;
+    const parsedPage = Math.max(1, page ? parseInt(page, 10) || 1 : 1);
+    const parsedLimit = Math.min(100, Math.max(1, rawLimit ? parseInt(rawLimit, 10) || 20 : 20));
+
     return this.adminService.listUsers({
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
-      search, role,
+      page: parsedPage,
+      limit: parsedLimit,
+      search,
+      role,
     });
   }
 
   @Patch('users/:id/role')
   @ApiOperation({ summary: 'Change a user role' })
-  async updateUserRole(@Param('id') id: string, @Body('role') role: Role) {
-    return this.adminService.updateUserRole(id, role);
+  async updateUserRole(@Param('id') id: string, @Body() dto: AdminUpdateRoleDto) {
+    return this.adminService.updateUserRole(id, dto.role);
   }
 
   @Delete('users/:id')
@@ -108,9 +207,7 @@ export class AdminController {
 
   @Post('ai-providers')
   @ApiOperation({ summary: 'Create a new AI provider' })
-  async createAiProvider(
-    @Body() dto: { name: string; baseUrl: string; apiKey: string; model?: string; isDefault?: boolean; description?: string },
-  ) {
+  async createAiProvider(@Body() dto: CreateAiProviderDto) {
     return this.adminService.createAiProvider(dto);
   }
 
@@ -118,7 +215,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Update an AI provider' })
   async updateAiProvider(
     @Param('id') id: string,
-    @Body() dto: { name?: string; baseUrl?: string; apiKey?: string; model?: string; isDefault?: boolean; isActive?: boolean; description?: string },
+    @Body() dto: UpdateAiProviderDto,
   ) {
     return this.adminService.updateAiProvider(id, dto);
   }

@@ -21,15 +21,20 @@ export default function RegisterPage() {
   const [error, setError] = React.useState('');
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, [field]: e.target.value }));
-
-    if (field === 'tenantName') {
-      const slug = e.target.value
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      setFormData((prev) => ({ ...prev, tenantSlug: slug }));
-    }
+    const value = e.target.value;
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'tenantName') {
+        const slug = value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        if (slug) {
+          next.tenantSlug = slug;
+        }
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,6 +67,11 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-lg border border-danger/20 bg-danger-light px-4 py-3 text-sm text-danger">
+              {error}
+            </div>
+          )}
           <Input
             label="Full Name"
             placeholder="John Doe"

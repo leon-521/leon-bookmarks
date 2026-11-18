@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+const FORWARDED_REQ_HEADERS = [
+  'content-type',
+  'authorization',
+  'accept',
+  'cookie',
+  'stripe-signature',
+  'x-forwarded-for',
+  'x-real-ip',
+];
+
+const FORWARDED_RES_HEADERS = [
+  'content-type',
+  'content-disposition',
+  'cache-control',
+  'set-cookie',
+];
+
 const getBackendBaseUrl = () => {
   const internal = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
   return internal.replace(/\/+$/, '').replace(/\/api$/, '');
@@ -17,12 +34,10 @@ async function proxyRequest(
   const targetUrl = `${targetBase}/api/${subPath}${search}`;
 
   const headers = new Headers();
-  const contentType = req.headers.get('content-type');
-  const authorization = req.headers.get('authorization');
-  const tenantHeader = req.headers.get('x-tenant-id');
-  if (contentType) headers.set('content-type', contentType);
-  if (authorization) headers.set('authorization', authorization);
-  if (tenantHeader) headers.set('x-tenant-id', tenantHeader);
+  for (const name of FORWARDED_REQ_HEADERS) {
+    const val = req.headers.get(name);
+    if (val) headers.set(name, val);
+  }
 
   const hasBody = !['GET', 'HEAD'].includes(req.method);
   const body = hasBody ? await req.arrayBuffer() : undefined;
@@ -36,8 +51,10 @@ async function proxyRequest(
     });
 
     const responseHeaders = new Headers();
-    const upstreamType = upstream.headers.get('content-type');
-    if (upstreamType) responseHeaders.set('content-type', upstreamType);
+    for (const name of FORWARDED_RES_HEADERS) {
+      const val = upstream.headers.get(name);
+      if (val) responseHeaders.set(name, val);
+    }
 
     if (upstream.status === 204) {
       return new NextResponse(null, { status: 204, headers: responseHeaders });

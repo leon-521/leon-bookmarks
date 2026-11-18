@@ -21,6 +21,6 @@ export interface PortalData {
 
 export const portalService = {
   getData: (slug: string) => api.get<PortalData>(`/portal/${slug}`),
-  search: (slug: string, query: string) => api.get<{ data: Bookmark[] }>(`/portal/${slug}/search`, { params: { q: query } }),
-  getByCategory: (slug: string, categoryId: string) => api.get<{ data: Bookmark[] }>(`/portal/${slug}/category/${categoryId}`),
+  search: (slug: string, query: string) => api.get<Bookmark[]>(`/portal/${slug}/search`, { params: { q: query } }),
+  getByCategory: (slug: string, categoryId: string) => api.get<Bookmark[]>(`/portal/${slug}/category/${categoryId}`),
 };

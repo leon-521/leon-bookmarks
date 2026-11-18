@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface JwtPayload {
@@ -9,6 +10,7 @@ export interface JwtPayload {
   tenantId: string;
   email: string;
   role: string;
+  tokenType?: 'access' | 'refresh';
 }
 
 @Injectable()
@@ -25,13 +27,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    if (payload.tokenType === 'refresh') {
+      throw new UnauthorizedException('Refresh token cannot be used as an access token');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, tenantId: true, email: true, role: true, name: true },
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        role: true,
+        name: true,
+        tenant: { select: { isActive: true } },
+      },
     });
 
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.tenant.isActive && user.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('This workspace has been suspended');
     }
 
     return {

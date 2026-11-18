@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { bookmarkService } from '@/lib/services';
 
 interface Bookmark {
   id: string;
@@ -53,8 +54,21 @@ export function BookmarkCard({
   onDelete,
   onPin,
 }: BookmarkCardProps) {
+  const faviconSrc = bookmark.faviconUrl || bookmark.favicon;
+  const isActive = (bookmark.status || 'ACTIVE').toUpperCase() === 'ACTIVE';
+  const categoryLabel = bookmark.category?.name || bookmark.categoryName || 'Uncategorized';
+
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(bookmark.url);
+  };
+
+  const handleTrackClick = () => {
+    bookmarkService.trackClick(bookmark.id).catch(() => {});
+  };
+
+  const handleOpen = () => {
+    handleTrackClick();
+    window.open(bookmark.url, '_blank', 'noopener,noreferrer');
   };
 
   if (variant === 'list') {
@@ -62,9 +76,9 @@ export function BookmarkCard({
       <div className="group flex items-center gap-4 rounded-lg border border-border bg-bg-primary px-4 py-3 transition-all duration-200 hover:border-border-hover hover:shadow-sm">
         {/* Favicon */}
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-bg-secondary">
-          {bookmark.faviconUrl || bookmark.favicon ? (
+          {faviconSrc ? (
             <img
-              src={bookmark.faviconUrl || bookmark.favicon}
+              src={faviconSrc}
               alt=""
               className="h-5 w-5 rounded-sm object-contain"
               onError={(e) => {
@@ -73,7 +87,7 @@ export function BookmarkCard({
               }}
             />
           ) : null}
-          <Globe className={cn('h-4 w-4 text-text-tertiary', bookmark.faviconUrl || bookmark.favicon && 'hidden')} />
+          <Globe className={cn('h-4 w-4 text-text-tertiary', Boolean(faviconSrc) && 'hidden')} />
         </div>
 
         {/* Title & URL */}
@@ -86,6 +100,7 @@ export function BookmarkCard({
               href={bookmark.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={handleTrackClick}
               className="truncate text-sm font-medium text-text-primary hover:text-accent transition-colors"
             >
               {bookmark.title}
@@ -98,7 +113,7 @@ export function BookmarkCard({
 
         {/* Category */}
         <Badge variant="secondary" className="hidden sm:inline-flex shrink-0">
-          {bookmark.categoryName}
+          {categoryLabel}
         </Badge>
 
         {/* Status */}
@@ -106,10 +121,12 @@ export function BookmarkCard({
           <span
             className={cn(
               'h-2 w-2 rounded-full',
-              bookmark.status === 'active' ? 'bg-success' : 'bg-danger'
+              isActive ? 'bg-success' : 'bg-danger'
             )}
           />
-          <span className="text-xs text-text-tertiary capitalize">{bookmark.status}</span>
+          <span className="text-xs text-text-tertiary capitalize">
+            {(bookmark.status || 'active').toLowerCase()}
+          </span>
         </div>
 
         {/* Actions */}
@@ -120,10 +137,8 @@ export function BookmarkCard({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem icon={<ExternalLink className="h-4 w-4" />}>
-              <a href={bookmark.url} target="_blank" rel="noopener noreferrer">
-                Open
-              </a>
+            <DropdownMenuItem icon={<ExternalLink className="h-4 w-4" />} onClick={handleOpen}>
+              Open
             </DropdownMenuItem>
             <DropdownMenuItem icon={<Copy className="h-4 w-4" />} onClick={handleCopyUrl}>
               Copy URL
@@ -164,9 +179,9 @@ export function BookmarkCard({
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-secondary shadow-xs">
-              {bookmark.faviconUrl || bookmark.favicon ? (
+              {faviconSrc ? (
                 <img
-                  src={bookmark.faviconUrl || bookmark.favicon}
+                  src={faviconSrc}
                   alt=""
                   className="h-6 w-6 rounded-sm object-contain"
                   onError={(e) => {
@@ -175,7 +190,7 @@ export function BookmarkCard({
                   }}
                 />
               ) : null}
-              <Globe className={cn('h-5 w-5 text-text-tertiary', bookmark.faviconUrl || bookmark.favicon && 'hidden')} />
+              <Globe className={cn('h-5 w-5 text-text-tertiary', Boolean(faviconSrc) && 'hidden')} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
@@ -186,6 +201,7 @@ export function BookmarkCard({
                   href={bookmark.url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={handleTrackClick}
                   className="block truncate text-sm font-semibold text-text-primary hover:text-accent transition-colors"
                 >
                   {bookmark.title}
@@ -195,7 +211,7 @@ export function BookmarkCard({
                 <span
                   className={cn(
                     'h-1.5 w-1.5 rounded-full shrink-0',
-                    bookmark.status === 'active' ? 'bg-success' : 'bg-danger'
+                    isActive ? 'bg-success' : 'bg-danger'
                   )}
                 />
                 <span className="truncate text-xs text-text-tertiary">
@@ -212,10 +228,8 @@ export function BookmarkCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem icon={<ExternalLink className="h-4 w-4" />}>
-                <a href={bookmark.url} target="_blank" rel="noopener noreferrer">
-                  Open
-                </a>
+              <DropdownMenuItem icon={<ExternalLink className="h-4 w-4" />} onClick={handleOpen}>
+                Open
               </DropdownMenuItem>
               <DropdownMenuItem icon={<Copy className="h-4 w-4" />} onClick={handleCopyUrl}>
                 Copy URL
