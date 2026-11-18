@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { useLocale } from '@/providers/locale-provider';
 import { tenantService } from '@/lib/services';
 
 const tabs = [
@@ -33,6 +34,7 @@ const layoutOptions = [
 ];
 
 export default function SettingsPage() {
+  const { t } = useLocale();
   const { tenant, updateTenantInfo } = useAuth();
   const [activeTab, setActiveTab] = React.useState<TabId>('general');
   const [saving, setSaving] = React.useState(false);
@@ -101,8 +103,8 @@ export default function SettingsPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        title="Settings"
-        description="Manage your workspace configuration and appearance."
+        title={t('settingsTitle')}
+        description={t('settingsDesc')}
       >
         <div className="flex items-center gap-2">
           <Link href="/settings/billing">
@@ -159,20 +161,20 @@ export default function SettingsPage() {
       {activeTab === 'general' && (
         <div className="rounded-xl border border-border bg-bg-primary p-6 shadow-xs space-y-6 animate-fade-in">
           <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-1">Workspace Details</h3>
-            <p className="text-sm text-text-secondary">Basic information about your workspace.</p>
+            <h2 className="text-lg font-semibold text-text-primary">{t('workspaceDetails')}</h2>
+            <p className="mt-1 text-sm text-text-secondary">{t('basicWorkspaceInfo')}</p>
           </div>
 
           <div className="space-y-4">
             <Input
-              label="Workspace Name"
+              label={t('workspaceName')}
               value={settings.name}
               onChange={(e) => setSettings((s) => ({ ...s, name: e.target.value }))}
             />
 
             <div className="space-y-2">
               <Input
-                label="Logo URL"
+                label={t('logoUrl')}
                 placeholder="https://example.com/logo.png"
                 value={settings.logo}
                 onChange={(e) => setSettings((s) => ({ ...s, logo: e.target.value }))}
@@ -207,8 +209,8 @@ export default function SettingsPage() {
       {activeTab === 'theme' && (
         <div className="rounded-xl border border-border bg-bg-primary p-6 shadow-xs space-y-8 animate-fade-in">
           <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-1">Theme Configuration</h3>
-            <p className="text-sm text-text-secondary">Customize the look and feel of your navigation portal.</p>
+            <h2 className="text-lg font-semibold text-text-primary">{t('themeConfig')}</h2>
+            <p className="mt-1 text-sm text-text-secondary">{t('customizePortal')}</p>
           </div>
 
           {/* Preset Selector */}

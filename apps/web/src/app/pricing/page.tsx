@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { billingService } from '@/lib/services';
 import type { PricingPlan } from '@/lib/services';
+import { useLocale } from '@/providers/locale-provider';
+import { LanguageToggle } from '@/components/layout/language-toggle';
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -111,6 +113,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 }
 
 export default function PricingPage() {
+  const { t } = useLocale();
   const { isAuthenticated } = useAuth();
   const [plans, setPlans] = React.useState<PricingPlan[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -135,6 +138,7 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
+      <div className="fixed right-5 top-5 z-50"><LanguageToggle /></div>
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-violet-50/50 to-bg-primary" />
@@ -150,13 +154,13 @@ export default function PricingPage() {
 
           <div className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent-muted px-4 py-1.5 mb-6">
             <Sparkles className="h-3.5 w-3.5 text-accent" />
-            <span className="text-xs font-medium text-accent">Simple, transparent pricing</span>
+            <span className="text-xs font-medium text-accent">{t('transparentPricing')}</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-display font-bold text-text-primary tracking-tight mb-4">
-            Choose the perfect plan
+            {t('choosePlan')}
             <br />
-            <span className="text-gradient">for your team</span>
+            <span className="text-gradient">{t('forYourTeam')}</span>
           </h1>
           <p className="text-lg text-text-secondary max-w-2xl mx-auto leading-relaxed">
             Start for free, upgrade when you need more. All plans include a 14-day trial of premium features.
@@ -216,7 +220,7 @@ export default function PricingPage() {
                     {isFree ? (
                       <Link href={isAuthenticated ? '/dashboard' : '/register'}>
                         <Button variant="outline" size="lg" className="w-full">
-                          {isAuthenticated ? 'Go to Dashboard' : 'Get Started'}
+                          {isAuthenticated ? t('dashboard') : t('getStarted')}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
                       </Link>
@@ -246,7 +250,7 @@ export default function PricingPage() {
         <div className="mx-auto max-w-2xl px-6 py-20">
           <div className="text-center mb-12">
             <h2 className="text-2xl font-display font-bold text-text-primary mb-2">
-              Frequently Asked Questions
+              {t('faq')}
             </h2>
             <p className="text-sm text-text-secondary">
               Everything you need to know about our plans and pricing.

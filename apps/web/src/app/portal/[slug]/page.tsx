@@ -4,6 +4,8 @@ import * as React from 'react';
 import { Search, Sun, Moon, ExternalLink, Globe, Sparkles, X } from 'lucide-react';
 import { cn, getDomainFromUrl } from '@/lib/utils';
 import { portalService } from '@/lib/services';
+import { useLocale } from '@/providers/locale-provider';
+import { LanguageToggle } from '@/components/layout/language-toggle';
 
 interface PortalBookmark {
   id: string;
@@ -61,6 +63,7 @@ function findPortalCategory(cats: PortalCategory[], id: string): PortalCategory 
 }
 
 export default function PortalPage({ params }: { params: { slug: string } }) {
+  const { t } = useLocale();
   const [search, setSearch] = React.useState('');
   const [isDark, setIsDark] = React.useState(false);
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
@@ -79,7 +82,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
           setError(null);
         }
       } catch (err: any) {
-        if (!cancelled) setError(err?.message || 'Portal not found');
+        if (!cancelled) setError(err?.message || 'PORTAL_NOT_FOUND');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -95,7 +98,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="h-10 w-10 mx-auto animate-spin rounded-full border-2 border-blue-500 border-t-transparent mb-4" />
-          <p className="text-gray-500 text-sm">Loading portal...</p>
+          <p className="text-gray-500 text-sm">{t('portalLoading')}</p>
         </div>
       </div>
     );
@@ -106,7 +109,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Globe className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">Portal Not Found</h2>
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">{error === 'PORTAL_NOT_FOUND' ? t('portalNotFound') : error}</h2>
           <p className="text-gray-500 text-sm">The portal &quot;{params.slug}&quot; doesn&apos;t exist or is not available.</p>
         </div>
       </div>
@@ -155,7 +158,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
   const uncategorizedBookmarks = filteredBookmarks.filter((b) => !allAssignedIds.has(b.id));
   if (uncategorizedBookmarks.length > 0) {
     groupedBookmarks.push({
-      category: { id: '__uncategorized__', name: 'Other Links' },
+      category: { id: '__uncategorized__', name: t('otherLinks') },
       bookmarks: uncategorizedBookmarks,
     });
   }
@@ -168,6 +171,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
         color: isDark ? '#f1f5f9' : '#0f172a',
       }}
     >
+      <div className="fixed right-5 top-5 z-50"><LanguageToggle /></div>
       {/* Header */}
       <header
         className="sticky top-0 z-10 border-b backdrop-blur-md"
@@ -202,7 +206,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
                 />
                 <input
                   type="text"
-                  placeholder="Search links..."
+                  placeholder={t('searchLinks')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-9 w-64 rounded-lg border pl-9 pr-8 text-sm transition-all focus:outline-none focus:ring-2"
@@ -244,7 +248,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
               />
               <input
                 type="text"
-                placeholder="Search links..."
+                placeholder={t('searchLinks')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-9 w-full rounded-lg border pl-9 pr-4 text-sm transition-all focus:outline-none focus:ring-2"
@@ -293,7 +297,7 @@ export default function PortalPage({ params }: { params: { slug: string } }) {
         {groupedBookmarks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Search className="h-12 w-12 mb-4" style={{ color: isDark ? '#334155' : '#cbd5e1' }} />
-            <h3 className="text-lg font-semibold mb-1">No results found</h3>
+            <h3 className="text-lg font-semibold mb-1">{t('noResults')}</h3>
             <p className="text-sm" style={{ color: isDark ? '#64748b' : '#94a3b8' }}>
               Try a different search term or category.
             </p>

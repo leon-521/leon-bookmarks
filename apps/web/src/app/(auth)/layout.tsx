@@ -1,4 +1,5 @@
 import { Sparkles } from 'lucide-react';
+import { LanguageToggle } from '@/components/layout/language-toggle';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,6 +24,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       {/* Right content area */}
       <div className="flex-1 flex items-center justify-center p-6">
+        <div className="fixed right-5 top-5 z-20"><LanguageToggle /></div>
         <div className="w-full max-w-md">{children}</div>
       </div>
     </div>

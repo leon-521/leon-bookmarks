@@ -7,10 +7,12 @@ import { Mail, Lock, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
+import { useLocale } from '@/providers/locale-provider';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading } = useAuth();
+  const { t } = useLocale();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
@@ -38,9 +40,9 @@ export default function LoginPage() {
 
       <div className="rounded-2xl border border-border bg-bg-primary p-8 shadow-lg">
         <div className="mb-6">
-          <h1 className="text-2xl font-display font-bold text-text-primary">Welcome back</h1>
+          <h1 className="text-2xl font-display font-bold text-text-primary">{t('welcomeBack')}</h1>
           <p className="mt-2 text-sm text-text-secondary">
-            Sign in to your account to continue
+            {t('signInContinue')}
           </p>
         </div>
 
@@ -51,7 +53,7 @@ export default function LoginPage() {
             </div>
           )}
           <Input
-            label="Email"
+            label={t('email')}
             type="email"
             placeholder="you@example.com"
             iconLeft={<Mail className="h-4 w-4" />}
@@ -61,7 +63,7 @@ export default function LoginPage() {
           />
 
           <Input
-            label="Password"
+            label={t('password')}
             type="password"
             placeholder="••••••••"
             iconLeft={<Lock className="h-4 w-4" />}
@@ -71,17 +73,17 @@ export default function LoginPage() {
           />
 
           <Button type="submit" className="w-full" size="lg" loading={isLoading}>
-            Sign In
+            {t('signIn')}
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-text-secondary">
-          Don&apos;t have an account?{' '}
+          {t('noAccount')}{' '}
           <Link
             href="/register"
             className="font-medium text-accent hover:text-accent-hover transition-colors"
           >
-            Sign up free
+            {t('signUpFree')}
           </Link>
         </p>
       </div>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { ToastProvider } from '@/components/ui/toast';
+import { LocaleProvider } from '@/providers/locale-provider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -19,11 +20,11 @@ export default function RootLayout({
     <html lang="zh-CN" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider>
-          <QueryProvider>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </QueryProvider>
+          <LocaleProvider>
+            <QueryProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </QueryProvider>
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

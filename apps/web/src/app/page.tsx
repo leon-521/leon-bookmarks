@@ -4,24 +4,8 @@ import Link from 'next/link';
 import { Sparkles, Bookmark, Users, Palette, ArrowRight, Zap, Shield, Globe, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/theme-provider';
-
-const features = [
-  {
-    icon: Bookmark,
-    title: 'Smart Bookmarks',
-    description: 'Organize your team\'s essential links with intelligent categorization, auto-fetching metadata, and powerful search.',
-  },
-  {
-    icon: Users,
-    title: 'Team Collaboration',
-    description: 'Multi-tenant workspaces let every team curate and share their own bookmark collection with role-based access.',
-  },
-  {
-    icon: Palette,
-    title: 'Custom Navigation Portals',
-    description: 'Create beautiful, branded navigation pages with custom themes, colors, and layouts that reflect your team\'s identity.',
-  },
-];
+import { useLocale } from '@/providers/locale-provider';
+import { LanguageToggle } from '@/components/layout/language-toggle';
 
 const stats = [
   { label: 'Teams Active', value: '2,500+' },
@@ -31,6 +15,12 @@ const stats = [
 
 export default function LandingPage() {
   const { resolvedTheme, setTheme } = useTheme();
+  const { t } = useLocale();
+  const features = [
+    { icon: Bookmark, title: t('smartBookmarks'), description: t('smartBookmarksDesc') },
+    { icon: Users, title: t('teamCollaboration'), description: t('teamCollaborationDesc') },
+    { icon: Palette, title: t('customPortals'), description: t('customPortalsDesc') },
+  ];
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -44,6 +34,7 @@ export default function LandingPage() {
             <span className="font-display text-lg font-semibold">Leon Bookmarks</span>
           </div>
           <div className="flex items-center gap-3">
+            <LanguageToggle />
             <button
               onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
               className="rounded-lg p-2 text-text-secondary hover:bg-bg-secondary transition-colors"
@@ -51,10 +42,10 @@ export default function LandingPage() {
               {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <Link href="/login">
-              <Button variant="ghost" size="sm">Sign In</Button>
+              <Button variant="ghost" size="sm">{t('signInLabel')}</Button>
             </Link>
             <Link href="/register">
-              <Button size="sm">Get Started</Button>
+              <Button size="sm">{t('getStarted')}</Button>
             </Link>
           </div>
         </div>
@@ -69,31 +60,28 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-4xl text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent-muted px-4 py-1.5 text-sm text-accent">
             <Zap className="h-3.5 w-3.5" />
-            <span>Now in public beta — free for all teams</span>
+            <span>{t('publicBeta')}</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-display font-bold tracking-tight text-text-primary leading-tight">
-            Your team&apos;s
-            <span className="text-gradient"> bookmark hub</span>
+            {t('heroTitle')}
           </h1>
 
           <p className="mt-6 text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
-            Organize, share, and navigate your team&apos;s essential links.
-            Create stunning navigation portals with custom themes
-            that your whole team will love.
+            {t('heroDescription')}
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/register">
               <Button size="lg" className="gap-2 px-8 shadow-lg shadow-accent/20">
-                Get Started Free
+                {t('getStartedFree')}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link href="/portal/acme-dev">
               <Button variant="outline" size="lg" className="gap-2 px-8">
                 <Globe className="h-4 w-4" />
-                View Demo Portal
+                {t('viewDemoPortal')}
               </Button>
             </Link>
           </div>

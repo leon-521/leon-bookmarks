@@ -21,8 +21,10 @@ import { useBookmarks } from '@/hooks/use-bookmarks';
 import { useCategories } from '@/hooks/use-categories';
 import { tenantService } from '@/lib/services';
 import { getDomainFromUrl, cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 
 export default function DashboardPage() {
+  const { t } = useLocale();
   const { user, tenant } = useAuth();
   const { data: bookmarksData, isLoading } = useBookmarks({ limit: 5, sortBy: 'createdAt', sortOrder: 'desc' });
   const { data: categories } = useCategories();
@@ -51,33 +53,33 @@ export default function DashboardPage() {
 
   const quickStats = [
     {
-      label: 'Total Bookmarks',
+      label: t('totalBookmarks'),
       value: String(totalBookmarks),
-      change: 'All time',
+      change: t('allTime'),
       icon: BookmarkIcon,
       color: 'text-accent',
       bgColor: 'bg-accent-muted',
     },
     {
-      label: 'Categories',
+      label: t('categories'),
       value: String(totalCategories),
-      change: 'Organized',
+      change: t('organized'),
       icon: FolderTree,
       color: 'text-success',
       bgColor: 'bg-success-light',
     },
     {
-      label: 'Team Members',
+      label: t('teamMembers'),
       value: memberCount !== null ? String(memberCount) : '--',
-      change: 'Active',
+      change: t('active'),
       icon: Users,
       color: 'text-warning',
       bgColor: 'bg-warning-light',
     },
     {
-      label: 'Recent Link Clicks',
+      label: t('recentClicks'),
       value: String(recentClicks),
-      change: 'Tracked',
+      change: t('tracked'),
       icon: TrendingUp,
       color: 'text-violet-500',
       bgColor: 'bg-violet-50',
@@ -88,13 +90,13 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Welcome */}
       <PageHeader
-        title={`Welcome back, ${user?.name?.split(' ')[0] || 'there'}`}
-        description="Here&rsquo;s what&rsquo;s happening in your workspace today."
+        title={`${t('welcomeBack')}, ${user?.name?.split(' ')[0] || ''}`}
+        description={t('dashboardDescription')}
       >
         <Link href="/bookmarks">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
-            Add Bookmark
+            {t('addBookmark')}
           </Button>
         </Link>
       </PageHeader>
@@ -126,9 +128,9 @@ export default function DashboardPage() {
         {/* Recent Bookmarks */}
         <div className="lg:col-span-2 rounded-xl border border-border bg-bg-primary shadow-xs">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="font-display font-semibold text-text-primary">Recent Bookmarks</h2>
+            <h2 className="font-display font-semibold text-text-primary">{t('recentBookmarks')}</h2>
             <Link href="/bookmarks" className="flex items-center gap-1 text-sm text-accent hover:text-accent-hover transition-colors">
-              View all
+              {t('viewAll')}
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -198,7 +200,7 @@ export default function DashboardPage() {
         {/* Quick Links */}
         <div className="rounded-xl border border-border bg-bg-primary shadow-xs">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="font-display font-semibold text-text-primary">Quick Actions</h2>
+            <h2 className="font-display font-semibold text-text-primary">{t('quickActions')}</h2>
           </div>
           <div className="p-4 space-y-2">
             <Link
@@ -208,7 +210,7 @@ export default function DashboardPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent-muted">
                 <BookmarkIcon className="h-4 w-4 text-accent" />
               </div>
-              <span className="text-sm font-medium text-text-primary">Manage Bookmarks</span>
+              <span className="text-sm font-medium text-text-primary">{t('bookmarks')}</span>
             </Link>
             <Link
               href="/categories"
@@ -217,7 +219,7 @@ export default function DashboardPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-success-light">
                 <FolderTree className="h-4 w-4 text-success" />
               </div>
-              <span className="text-sm font-medium text-text-primary">Manage Categories</span>
+              <span className="text-sm font-medium text-text-primary">{t('manageCategories')}</span>
             </Link>
             <Link
               href="/settings"
@@ -226,7 +228,7 @@ export default function DashboardPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-warning-light">
                 <TrendingUp className="h-4 w-4 text-warning" />
               </div>
-              <span className="text-sm font-medium text-text-primary">Theme & Settings</span>
+              <span className="text-sm font-medium text-text-primary">{t('themeSettings')}</span>
             </Link>
             {tenant?.slug && (
               <Link
@@ -237,7 +239,7 @@ export default function DashboardPage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-violet-50">
                   <Globe className="h-4 w-4 text-violet-500" />
                 </div>
-                <span className="text-sm font-medium text-text-primary">View Portal</span>
+                <span className="text-sm font-medium text-text-primary">{t('viewPortal')}</span>
               </Link>
             )}
           </div>

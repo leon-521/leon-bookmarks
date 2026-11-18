@@ -24,8 +24,10 @@ import {
 } from '@/hooks/use-bookmarks';
 import { useCategories } from '@/hooks/use-categories';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/providers/locale-provider';
 
 export default function BookmarksPage() {
+  const { t } = useLocale();
   const [view, setView] = React.useState<'grid' | 'list'>('grid');
   const [search, setSearch] = React.useState('');
   const [categoryFilter, setCategoryFilter] = React.useState('all');
@@ -143,19 +145,19 @@ export default function BookmarksPage() {
   return (
     <div className="max-w-7xl mx-auto">
       <PageHeader
-        title="Bookmarks"
-        description="Manage and organize your team's bookmark collection."
+        title={t('bookmarksTitle')}
+        description={t('manageBookmarks')}
       >
         <div className="flex items-center gap-2">
           <Link href="/ai">
             <Button variant="outline" className="gap-1.5">
               <Sparkles className="h-4 w-4 text-accent" />
-              AI Organize
+              {t('aiOrganize')}
             </Button>
           </Link>
           <Button onClick={() => { setActionError(null); setFormOpen(true); }} className="gap-2">
             <Plus className="h-4 w-4" />
-            Add Bookmark
+            {t('addBookmark')}
           </Button>
         </div>
       </PageHeader>

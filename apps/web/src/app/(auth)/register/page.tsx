@@ -7,10 +7,12 @@ import { User, Mail, Lock, Building2, Link2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
+import { useLocale } from '@/providers/locale-provider';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register: registerUser, isLoading } = useAuth();
+  const { t } = useLocale();
   const [formData, setFormData] = React.useState({
     name: '',
     email: '',
@@ -60,9 +62,9 @@ export default function RegisterPage() {
 
       <div className="rounded-2xl border border-border bg-bg-primary p-8 shadow-lg">
         <div className="mb-6">
-          <h1 className="text-2xl font-display font-bold text-text-primary">Create your account</h1>
+          <h1 className="text-2xl font-display font-bold text-text-primary">{t('createAccount')}</h1>
           <p className="mt-2 text-sm text-text-secondary">
-            Set up your team workspace in just a few steps
+            {t('setupWorkspace')}
           </p>
         </div>
 
@@ -73,7 +75,7 @@ export default function RegisterPage() {
             </div>
           )}
           <Input
-            label="Full Name"
+            label={t('fullName')}
             placeholder="John Doe"
             iconLeft={<User className="h-4 w-4" />}
             value={formData.name}
@@ -82,7 +84,7 @@ export default function RegisterPage() {
           />
 
           <Input
-            label="Email"
+            label={t('email')}
             type="email"
             placeholder="you@example.com"
             iconLeft={<Mail className="h-4 w-4" />}
@@ -92,7 +94,7 @@ export default function RegisterPage() {
           />
 
           <Input
-            label="Password"
+            label={t('password')}
             type="password"
             placeholder="••••••••"
             iconLeft={<Lock className="h-4 w-4" />}
@@ -104,12 +106,12 @@ export default function RegisterPage() {
 
           <div className="pt-2 pb-1">
             <div className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-              Team Workspace
+              {t('teamWorkspace')}
             </div>
           </div>
 
           <Input
-            label="Team Name"
+            label={t('teamName')}
             placeholder="Acme Dev Team"
             iconLeft={<Building2 className="h-4 w-4" />}
             value={formData.tenantName}
@@ -118,7 +120,7 @@ export default function RegisterPage() {
           />
 
           <Input
-            label="Workspace Slug"
+            label={t('workspaceSlug')}
             placeholder="acme-dev"
             iconLeft={<Link2 className="h-4 w-4" />}
             helperText={formData.tenantSlug ? `Your portal: leon.app/portal/${formData.tenantSlug}` : 'URL-friendly name for your workspace'}
@@ -128,17 +130,17 @@ export default function RegisterPage() {
           />
 
           <Button type="submit" className="w-full" size="lg" loading={isLoading}>
-            Create Account
+            {t('createAccountButton')}
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-text-secondary">
-          Already have an account?{' '}
+          {t('alreadyAccount')}{' '}
           <Link
             href="/login"
             className="font-medium text-accent hover:text-accent-hover transition-colors"
           >
-            Sign in
+            {t('signIn')}
           </Link>
         </p>
       </div>

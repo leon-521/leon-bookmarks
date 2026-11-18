@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
+import { useLocale } from '@/providers/locale-provider';
 
 interface NavItem {
   label: string;
@@ -26,15 +27,6 @@ interface NavItem {
   icon: React.ElementType;
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
-  { label: 'Categories', href: '/categories', icon: FolderTree },
-  { label: 'Members', href: '/members', icon: Users },
-  { label: 'Import', href: '/import', icon: Import },
-  { href: '/ai', label: 'AI Assistant', icon: Sparkles },
-  { label: 'Settings', href: '/settings', icon: Settings },
-];
 
 interface SidebarProps {
   collapsed: boolean;
@@ -46,13 +38,17 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const visibleNavItems = React.useMemo(
-    () =>
-      user?.role === 'SUPER_ADMIN'
-        ? [...navItems, { label: 'Super Admin', href: '/admin', icon: Shield }]
-        : navItems,
-    [user?.role]
-  );
+  const { t } = useLocale();
+  const visibleNavItems: NavItem[] = [
+    { label: t('dashboard'), href: '/dashboard', icon: LayoutDashboard },
+    { label: t('bookmarks'), href: '/bookmarks', icon: Bookmark },
+    { label: t('categories'), href: '/categories', icon: FolderTree },
+    { label: t('members'), href: '/members', icon: Users },
+    { label: t('import'), href: '/import', icon: Import },
+    { href: '/ai', label: t('ai'), icon: Sparkles },
+    { label: t('settings'), href: '/settings', icon: Settings },
+    ...(user?.role === 'SUPER_ADMIN' ? [{ label: t('admin'), href: '/admin', icon: Shield }] : []),
+  ];
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -124,7 +120,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           ) : (
             <>
               <ChevronLeft className="h-4 w-4" />
-              <span>Collapse</span>
+              <span>{t('collapse')}</span>
             </>
           )}
         </Button>

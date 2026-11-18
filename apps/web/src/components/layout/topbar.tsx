@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { useTheme } from '@/providers/theme-provider';
 import { useAuth } from '@/hooks/use-auth';
+import { useLocale } from '@/providers/locale-provider';
+import { LanguageToggle } from '@/components/layout/language-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +28,7 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { t } = useLocale();
   const [searchQuery, setSearchQuery] = React.useState('');
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -68,7 +71,7 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search bookmarks (press Enter)..."
+            placeholder={t('searchBookmarks')}
             className={cn(
               'w-full h-9 rounded-lg border border-border bg-bg-secondary pl-9 pr-4 text-sm text-text-primary',
               'placeholder:text-text-tertiary',
@@ -81,6 +84,7 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
 
       {/* Right actions */}
       <div className="flex items-center gap-1 ml-4">
+        <LanguageToggle />
         {/* Theme toggle */}
         <Button
           variant="ghost"
@@ -114,17 +118,17 @@ export function TopBar({ sidebarCollapsed, onMenuClick }: TopBarProps) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push('/settings')}>
-              Workspace Settings
+              {t('workspaceSettings')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push('/settings/billing')}>
-              Billing &amp; Plan
+              {t('billingPlan')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleSignOut}
               className="text-danger focus:text-danger"
             >
-              Sign out
+              {t('signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

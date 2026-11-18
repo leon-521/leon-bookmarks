@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BookmarkGrid } from '@/components/bookmark/bookmark-grid';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useLocale } from '@/providers/locale-provider';
 
 interface Category {
   id: string;
@@ -22,6 +23,7 @@ interface Category {
 }
 
 export default function CategoriesPage() {
+  const { t } = useLocale();
   const queryClient = useQueryClient();
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -186,9 +188,9 @@ export default function CategoriesPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <PageHeader title="Categories" description="Organize your bookmarks with categories and subcategories.">
+      <PageHeader title={t('categoriesTitle')} description={t('categoriesDesc')}>
         <Button onClick={() => { setActionError(null); setIsCreating(true); setCreateParentId(null); }} className="gap-2">
-          <Plus className="h-4 w-4" /> Add Category
+          <Plus className="h-4 w-4" /> {t('addCategory')}
         </Button>
       </PageHeader>
 
@@ -202,7 +204,7 @@ export default function CategoriesPage() {
         {/* Category Tree */}
         <div className="lg:col-span-4 rounded-xl border border-border bg-bg-primary shadow-xs">
           <div className="border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-text-primary">Category Tree</h3>
+            <h3 className="text-sm font-semibold text-text-primary">{t('categoryTree')}</h3>
           </div>
           <div className="p-2 max-h-[600px] overflow-y-auto">
             {loading ? (
