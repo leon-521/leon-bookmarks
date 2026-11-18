@@ -78,7 +78,7 @@ export class BillingService {
         const StripeModule = await import('stripe').catch(() => null);
         if (StripeModule) {
           const Stripe = StripeModule.default || StripeModule;
-          this.stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' });
+          this.stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' as any });
           this.logger.log('Stripe initialized successfully');
         }
       } catch (error) {

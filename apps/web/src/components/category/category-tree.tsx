@@ -117,7 +117,7 @@ function CategoryNode({
             className="absolute left-0 top-0 bottom-0 w-px bg-border"
             style={{ marginLeft: `${depth * 20 + 18}px` }}
           />
-          {category.children!.map((child) => (
+          {category.children!.map((child: Category) => (
             <CategoryNode
               key={child.id}
               category={child}

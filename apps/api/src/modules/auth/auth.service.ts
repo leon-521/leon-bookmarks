@@ -34,6 +34,9 @@ export class AuthService {
 
     // Create tenant and user in a transaction
     const result = await this.prisma.$transaction(async (tx) => {
+      const existingUserCount = await tx.user.count();
+      const initialRole = existingUserCount === 0 ? Role.SUPER_ADMIN : Role.ADMIN;
+
       const tenant = await tx.tenant.create({
         data: {
           name: dto.tenantName,
@@ -47,7 +50,7 @@ export class AuthService {
           email: dto.email,
           name: dto.name,
           password: hashedPassword,
-          role: Role.ADMIN,
+          role: initialRole,
         },
       });
 

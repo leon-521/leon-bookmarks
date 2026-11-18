@@ -50,7 +50,7 @@ export default function AiProvidersPage() {
   const fetchProviders = React.useCallback(async () => {
     try {
       const res = await adminService.listAiProviders();
-      setProviders(res.data || res || []);
+      setProviders(Array.isArray(res) ? res : res?.data || []);
     } catch (err) {
       console.error('Failed to fetch AI providers:', err);
     } finally {
@@ -71,7 +71,8 @@ export default function AiProvidersPage() {
     setActionLoading('form');
     try {
       if (editingId) {
-        await adminService.updateAiProvider(editingId, formData);
+        const { apiKey, ...rest } = formData;
+        await adminService.updateAiProvider(editingId, apiKey.trim() ? formData : rest);
       } else {
         await adminService.createAiProvider(formData);
       }

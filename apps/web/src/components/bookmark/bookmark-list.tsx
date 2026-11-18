@@ -4,7 +4,7 @@ import * as React from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BookmarkCard } from './bookmark-card';
-type Bookmark = Record<string, any>;
+type Bookmark = any;
 
 interface BookmarkListProps {
   bookmarks: Bookmark[];

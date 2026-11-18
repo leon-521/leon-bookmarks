@@ -212,24 +212,31 @@ export class AdminService {
     isDefault?: boolean;
     description?: string;
   }) {
-    // If this is set as default, unset all others
-    if (data.isDefault) {
+    const existingCount = await this.prisma.aiProvider.count();
+    const shouldBeDefault = data.isDefault ?? existingCount === 0;
+
+    if (shouldBeDefault) {
       await this.prisma.aiProvider.updateMany({
         where: { isDefault: true },
         data: { isDefault: false },
       });
     }
 
-    return this.prisma.aiProvider.create({
+    const created = await this.prisma.aiProvider.create({
       data: {
-        name: data.name,
-        baseUrl: data.baseUrl,
-        apiKey: data.apiKey,
-        model: data.model || 'gpt-4o-mini',
-        isDefault: data.isDefault ?? false,
-        description: data.description,
+        name: data.name.trim(),
+        baseUrl: data.baseUrl.trim().replace(/\/+$/, ''),
+        apiKey: data.apiKey.trim(),
+        model: (data.model || 'gpt-4o-mini').trim(),
+        isDefault: shouldBeDefault,
+        description: data.description?.trim() || null,
       },
     });
+
+    return {
+      ...created,
+      apiKey: created.apiKey ? `${'*'.repeat(Math.max(0, created.apiKey.length - 4))}${created.apiKey.slice(-4)}` : '',
+    };
   }
 
   async updateAiProvider(id: string, data: {
@@ -252,18 +259,23 @@ export class AdminService {
       });
     }
 
-    return this.prisma.aiProvider.update({
+    const updated = await this.prisma.aiProvider.update({
       where: { id },
       data: {
-        ...(data.name !== undefined && { name: data.name }),
-        ...(data.baseUrl !== undefined && { baseUrl: data.baseUrl }),
-        ...(data.apiKey !== undefined && { apiKey: data.apiKey }),
-        ...(data.model !== undefined && { model: data.model }),
+        ...(data.name !== undefined && { name: data.name.trim() }),
+        ...(data.baseUrl !== undefined && { baseUrl: data.baseUrl.trim().replace(/\/+$/, '') }),
+        ...(data.apiKey !== undefined && data.apiKey.trim() !== '' && { apiKey: data.apiKey.trim() }),
+        ...(data.model !== undefined && { model: data.model.trim() }),
         ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
-        ...(data.description !== undefined && { description: data.description }),
+        ...(data.description !== undefined && { description: data.description.trim() || null }),
       },
     });
+
+    return {
+      ...updated,
+      apiKey: updated.apiKey ? `${'*'.repeat(Math.max(0, updated.apiKey.length - 4))}${updated.apiKey.slice(-4)}` : '',
+    };
   }
 
   async setDefaultAiProvider(id: string) {

@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
-interface CategoryTreeNode {
+export interface CategoryTreeNode {
   id: string;
   name: string;
   icon: string | null;

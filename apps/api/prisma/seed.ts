@@ -45,7 +45,7 @@ async function main() {
       email: 'leon@bookmarks.dev',
       name: 'Leon Chen',
       password,
-      role: Role.ADMIN,
+      role: Role.SUPER_ADMIN,
     },
   });
 

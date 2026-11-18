@@ -14,9 +14,11 @@ import {
   ChevronRight,
   X,
   Sparkles,
+  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/use-auth';
 
 interface NavItem {
   label: string;
@@ -43,6 +45,14 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const visibleNavItems = React.useMemo(
+    () =>
+      user?.role === 'SUPER_ADMIN'
+        ? [...navItems, { label: 'Super Admin', href: '/admin', icon: Shield }]
+        : navItems,
+    [user?.role]
+  );
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -72,7 +82,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto scrollbar-none px-3 py-4">
         <ul className="space-y-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
             return (
               <li key={item.href}>

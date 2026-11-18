@@ -221,7 +221,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: http://localhost:4000
+      HOSTNAME: "0.0.0.0"
+      PORT: 3000
+      API_INTERNAL_URL: http://api:4000
       NEXT_TELEMETRY_DISABLED: 1
     ports:
       - "3000:3000"
@@ -287,26 +289,15 @@ networks:
 2. 1Panel 将自动拉取镜像并构建、启动所有容器
 3. 等待提示 **「任务成功」**（首次构建约 5-10 分钟）
 
-### 第六步：初始化数据库
+### 第六步：数据库初始化（已自动完成）
 
-编排启动成功后，需要初始化数据库：
+`lb-api` 容器启动时会自动执行 `npx prisma db push` 创建所有数据表，无需手动迁移！
 
-1. 进入 1Panel → **「容器」** → **「容器列表」**
-2. 找到 `lb-api` 容器，点击右侧 **「终端」** 按钮
-3. 在终端中依次执行：
+> **💡 说明：** 首个通过注册页面创建的账号会自动成为 **超级管理员 (`SUPER_ADMIN`)**，可直接进入管理后台配置 AI 供应商。
 
-```bash
-# 运行数据库迁移
-npx prisma migrate deploy
-
-# （可选）填充演示数据
-npx prisma db seed
-```
-
-或者通过 1Panel 的 **「终端」** 功能直接在宿主机执行：
+如果你需要导入演示数据（包含演示租户与账号），可在 `lb-api` 容器终端或宿主机执行：
 
 ```bash
-docker exec lb-api npx prisma migrate deploy
 docker exec lb-api npx prisma db seed
 ```
 
@@ -412,7 +403,7 @@ cd {1Panel安装目录}/1panel/docker/compose/leon-bookmarks
 docker compose up -d --build api web
 
 # 运行数据库迁移（如有新版本）
-docker exec lb-api npx prisma migrate deploy
+docker exec lb-api npx prisma db push
 ```
 
 或在 1Panel 编排页面直接点击 **「重新部署」**。

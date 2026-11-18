@@ -8,7 +8,7 @@ interface ImportOptions {
   skipDuplicates: boolean;
 }
 
-interface ImportResult {
+export interface ImportResult {
   importedBookmarks: number;
   importedCategories: number;
   skippedDuplicates: number;

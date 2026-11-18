@@ -211,7 +211,7 @@ docker compose --env-file .env.docker up -d --build
 
 ```bash
 # 运行数据库迁移 / Run migrations
-docker compose exec api npx prisma migrate deploy
+docker compose exec api npx prisma db push
 
 # （可选）填充示例数据 / (Optional) Seed demo data
 docker compose exec api npx prisma db seed
@@ -249,7 +249,7 @@ docker compose exec api npx prisma db seed
 2. **粘贴配置** — 将 [1Panel 部署指南](docs/1panel-deploy.md) 中的 Docker Compose 配置粘贴进去
 3. **修改密码** — 修改 PostgreSQL、JWT、Meilisearch、MinIO 的密码
 4. **确认创建** — 等待构建完成（约 5-10 分钟）
-5. **初始化 DB** — 在 `lb-api` 容器终端执行 `npx prisma migrate deploy`
+5. **初始化 DB** — 在 `lb-api` 容器终端执行 `npx prisma db push`
 6. **配置域名** — （可选）通过 1Panel 网站管理创建反向代理 + HTTPS
 
 ---
@@ -295,7 +295,7 @@ docker compose exec api sh
 docker compose exec postgres psql -U postgres -d leon_bookmarks
 
 # 数据库操作 / Database operations
-docker compose exec api npx prisma migrate deploy   # 运行迁移 / Run migrations
+docker compose exec api npx prisma db push   # 运行迁移 / Run migrations
 docker compose exec api npx prisma db seed           # 填充数据 / Seed data
 docker compose exec api npx prisma studio            # 可视化管理 / Visual DB manager
 ```

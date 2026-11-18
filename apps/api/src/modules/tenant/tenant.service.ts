@@ -155,7 +155,7 @@ export class TenantService {
     }
 
     const assignedRole =
-      dto.role && [Role.ADMIN, Role.EDITOR, Role.VIEWER].includes(dto.role)
+      dto.role && ([Role.ADMIN, Role.EDITOR, Role.VIEWER] as Role[]).includes(dto.role)
         ? dto.role
         : Role.EDITOR;
 
@@ -181,7 +181,7 @@ export class TenantService {
   }
 
   async updateMemberRole(tenantId: string, requesterId: string, memberId: string, role: Role) {
-    if (![Role.ADMIN, Role.EDITOR, Role.VIEWER].includes(role)) {
+    if (!([Role.ADMIN, Role.EDITOR, Role.VIEWER] as Role[]).includes(role)) {
       throw new BadRequestException('Invalid workspace role');
     }
     if (requesterId === memberId && role !== Role.ADMIN) {

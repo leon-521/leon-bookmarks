@@ -1,4 +1,17 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+function getApiBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configured && !configured.includes('localhost')) {
+    const clean = configured.replace(/\/+$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api`;
+  }
+  const internal = (process.env.API_INTERNAL_URL || configured || 'http://localhost:4000')
+    .replace(/\/+$/, '')
+    .replace(/\/api$/, '');
+  return `${internal}/api`;
+}
 
 interface RequestConfig {
   headers?: Record<string, string>;
@@ -6,12 +19,6 @@ interface RequestConfig {
 }
 
 class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
-  }
-
   private getAuthHeaders(): Record<string, string> {
     if (typeof window === 'undefined') return {};
     const token = localStorage.getItem('auth_token');
@@ -19,7 +26,8 @@ class ApiClient {
   }
 
   private buildUrl(path: string, params?: Record<string, string>): string {
-    const url = new URL(`${this.baseUrl}${path}`);
+    const baseUrl = getApiBaseUrl();
+    const url = new URL(`${baseUrl}${path}`);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         url.searchParams.append(key, value);
@@ -111,4 +119,4 @@ export class ApiError extends Error {
   }
 }
 
-export const api = new ApiClient(API_BASE_URL);
+export const api = new ApiClient();
