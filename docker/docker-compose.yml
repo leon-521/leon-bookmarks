@@ -1,0 +1,85 @@
+version: '3.9'
+
+services:
+  # ═══════════════════════════════════════════════
+  # PostgreSQL - Primary Database
+  # ═══════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: lb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: leon_bookmarks
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════════════════════════════════════════
+  # Redis - Cache & Queue
+  # ═══════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: lb-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════════════════════════════════════════
+  # Meilisearch - Search Engine
+  # ═══════════════════════════════════════════════
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: lb-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: masterKey123
+      MEILI_ENV: development
+    ports:
+      - '7700:7700'
+    volumes:
+      - meilidata:/meili_data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:7700/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ═══════════════════════════════════════════════
+  # MinIO - Object Storage (S3-compatible)
+  # ═══════════════════════════════════════════════
+  minio:
+    image: minio/minio:latest
+    container_name: lb-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  redisdata:
+  meilidata:
+  miniodata:

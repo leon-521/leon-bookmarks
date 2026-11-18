@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum BookmarkStatus {
+  ACTIVE
+  BROKEN
+  ARCHIVED
+}
+
+model Tenant {
+  id            String    @id @default(uuid())
+  name          String
+  slug          String    @unique
+  customDomain  String?   @unique @map("custom_domain")
+  plan          Plan      @default(FREE)
+  logo          String?
+  favicon       String?
+  themeConfig   Json?     @map("theme_config")
+  maxBookmarks  Int       @default(500) @map("max_bookmarks")
+  maxMembers    Int       @default(5) @map("max_members")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  users      User[]
+  categories Category[]
+  bookmarks  Bookmark[]
+
+  @@map("tenants")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  email      String
+  name       String
+  password   String?
+  avatarUrl  String?  @map("avatar_url")
+  role       Role     @default(VIEWER)
+  provider   String?
+  providerId String?  @map("provider_id")
+  lastLogin  DateTime? @map("last_login")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookmarks Bookmark[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Category {
+  id        String  @id @default(uuid())
+  tenantId  String  @map("tenant_id")
+  parentId  String? @map("parent_id")
+  name      String
+  icon      String?
+  sortOrder Int     @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  bookmarks Bookmark[]
+
+  @@index([tenantId, parentId])
+  @@map("categories")
+}
+
+model Bookmark {
+  id          String         @id @default(uuid())
+  tenantId    String         @map("tenant_id")
+  categoryId  String?        @map("category_id")
+  createdById String         @map("created_by_id")
+  title       String
+  url         String
+  description String?
+  faviconUrl  String?        @map("favicon_url")
+  ogImageUrl  String?        @map("og_image_url")
+  tags        String[]       @default([])
+  sortOrder   Int            @default(0) @map("sort_order")
+  isPinned    Boolean        @default(false) @map("is_pinned")
+  clickCount  Int            @default(0) @map("click_count")
+  status      BookmarkStatus @default(ACTIVE)
+  lastChecked DateTime?      @map("last_checked")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category  Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy User      @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId, categoryId])
+  @@map("bookmarks")
+}
