@@ -12,6 +12,11 @@ COPY . .
 RUN pnpm install --no-frozen-lockfile
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN cd apps/web && pnpm build
+RUN set -eu; \
+    css_dir="/app/apps/web/.next/static/css"; \
+    css_files="$(find "$css_dir" -type f -name '*.css')"; \
+    test -n "$css_files"; \
+    found=; for css in $css_files; do if grep -Fq '.min-h-screen' "$css"; then found=1; break; fi; done; test -n "$found"
 
 # ── Production ──
 FROM node:20-alpine AS production
